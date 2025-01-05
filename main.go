@@ -18,7 +18,7 @@ func main() {
 		log.Fatalf("Failed to connect to the database: %v", err)
 	}
 
-	dbError := routes.DB.AutoMigrate(&routes.Receptionist{})
+	dbError := routes.DB.AutoMigrate(&routes.Receptionist{}, &routes.Admin{})
 	if dbError != nil {
 		return
 	}
@@ -32,6 +32,7 @@ func main() {
 
 	router.POST("/login", routes.Login)
 	router.POST("/forgot-password", routes.ForgotPassword)
+	router.POST("/admin", routes.AdminLogin)
 
 	runErr := router.Run("localhost:8080")
 	if runErr != nil {
