@@ -41,7 +41,7 @@ func ForgotPassword(c *gin.Context) {
 
 func sendEmail(to, subject, body string) error {
 	from := "aureo.yangon@gmail.com"
-	password := "qhdaloixuhvptxne"
+	password := "cfwcbkgsfvnntsav"
 	smtpHost := "smtp.gmail.com"
 	smtpPort := 587
 
