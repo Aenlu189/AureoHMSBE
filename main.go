@@ -24,7 +24,8 @@ func main() {
 	dbError := routes.DB.AutoMigrate(
 		&routes.Receptionist{},
 		&routes.Admin{},
-		&routes.Rooms{})
+		&routes.Rooms{},
+		&routes.Reservation{})
 	if dbError != nil {
 		return
 	}
@@ -47,13 +48,17 @@ func main() {
 	})
 	router.Use(sessions.Sessions("mysession", store))
 
+	// Authentication
 	router.POST("/login", routes.Login)
 	router.POST("/logout", routes.Logout)
 	router.POST("/forgot-password", routes.ForgotPassword)
 	router.POST("/admin", routes.AdminLogin)
-
 	router.GET("/check-session", checkSession)
 
+	// Reservation
+	router.POST("/create-reservation", routes.CreateReservation)
+	router.GET("reservations/date/:date", routes.GetReservationsByDate)
+	router.DELETE("reservations/:id", routes.DeleteReservation)
 	protected := router.Group("/")
 	protected.Use(routes.AuthMiddleware())
 
