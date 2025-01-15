@@ -25,7 +25,8 @@ func main() {
 		&routes.Receptionist{},
 		&routes.Admin{},
 		&routes.Rooms{},
-		&routes.Reservation{})
+		&routes.Reservation{},
+		&routes.Guests{})
 	if dbError != nil {
 		return
 	}
@@ -58,7 +59,16 @@ func main() {
 	// Reservation
 	router.POST("/create-reservation", routes.CreateReservation)
 	router.GET("reservations/date/:date", routes.GetReservationsByDate)
+	router.GET("reservations/:id", routes.GetReservation)
 	router.DELETE("reservations/:id", routes.DeleteReservation)
+	router.PUT("reservations/:id", routes.UpdateReservation)
+
+	//Rooms
+	router.POST("/create-guest", routes.CreateGuest)
+	router.GET("/rooms", routes.GetRooms)
+	router.GET("/rooms/:room", routes.GetRoom)
+	router.PUT("rooms/:room", routes.UpdateRoomStatus)
+
 	protected := router.Group("/")
 	protected.Use(routes.AuthMiddleware())
 

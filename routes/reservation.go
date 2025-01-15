@@ -21,6 +21,7 @@ type Reservation struct {
 	ReservationDate time.Time `gorm:"type:date;not null"`
 	Status          string    `gorm:"type:enum('CANCELLED','CHECKED-IN','CONFIRMED');default:'CONFIRMED'"`
 	ExtraBed        bool      `gorm:"default:false"`
+	PaymentType     string    `gorm:"type:enum('NONE', 'KPAY', 'AYAPAY', 'WAVEPAY', 'CASH');default:'NONE'"`
 	AmountPaid      *int      `gorm:"null"`
 	Notes           *string   `gorm:"type:text;null"`
 }
@@ -70,6 +71,24 @@ func GetReservationsByDate(c *gin.Context) {
 	c.JSON(http.StatusOK, reservations)
 }
 
+func GetReservation(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Reservation ID is required"})
+		return
+	}
+
+	var reservation Reservation
+	if err := DB.First(&reservation, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Reservation not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+	}
+	c.JSON(http.StatusOK, reservation)
+}
+
 func DeleteReservation(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -94,4 +113,35 @@ func DeleteReservation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Reservation deleted successfully"})
+}
+
+func UpdateReservation(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Reservation ID is required"})
+		return
+	}
+
+	var reservation Reservation
+	if err := c.BindJSON(&reservation); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	var existingReservation Reservation
+	if err := DB.First(&existingReservation, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Reservation not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+
+	if err := DB.Model(&existingReservation).Updates(reservation).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, existingReservation)
 }

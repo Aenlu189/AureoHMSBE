@@ -1,7 +1,9 @@
 package routes
 
 import (
+	"errors"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"net/http"
 )
 
@@ -50,4 +52,62 @@ func GetDashboardStats(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, stats)
+}
+
+func GetRooms(c *gin.Context) {
+	var room []Rooms
+	if err := DB.Find(&room).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, room)
+}
+
+func GetRoom(c *gin.Context) {
+	roomNumber := c.Param("room")
+	if roomNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Room number is required"})
+		return
+	}
+
+	var room Rooms
+	if err := DB.Where("room = ?", roomNumber).First(&room).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, room)
+}
+
+func UpdateRoomStatus(c *gin.Context) {
+	roomNumber := c.Param("room")
+	if roomNumber == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Room number is required"})
+		return
+	}
+
+	var room Rooms
+	if err := c.BindJSON(&room); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	var existingRoom Rooms
+	if err := DB.Where("room = ?", roomNumber).First(&existingRoom).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Room not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+
+	if err := DB.Model(&existingRoom).Select("status").Updates(room).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, existingRoom)
 }
