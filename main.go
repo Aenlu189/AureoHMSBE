@@ -3,14 +3,15 @@ package main
 import (
 	"AureoHMSBE/routes"
 	"fmt"
+	"log"
+	"net/http"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"log"
-	"net/http"
 )
 
 func main() {
@@ -26,7 +27,12 @@ func main() {
 		&routes.Admin{},
 		&routes.Rooms{},
 		&routes.Reservation{},
-		&routes.Guests{})
+		&routes.Guests{},
+		&routes.FoodOrder{},
+		&routes.Menu{},
+		&routes.Income{},
+		&routes.Staff{},
+		&routes.CleaningRecord{})
 	if dbError != nil {
 		return
 	}
@@ -64,10 +70,49 @@ func main() {
 	router.PUT("reservations/:id", routes.UpdateReservation)
 
 	//Rooms
-	router.POST("/create-guest", routes.CreateGuest)
 	router.GET("/rooms", routes.GetRooms)
 	router.GET("/rooms/:room", routes.GetRoom)
 	router.PUT("rooms/:room", routes.UpdateRoomStatus)
+
+	//Guests
+	router.POST("/create-guest", routes.CreateGuest)
+	router.GET("/guests/current/:roomNumber", routes.GetCurrentGuest)
+	router.GET("/guests/checkouts/today", routes.GetTodayCheckouts)
+	router.PUT("/guests/:id", routes.UpdateGuestInfo)
+	router.PUT("/guests/foodPrice/:id", routes.UpdateGuestFoodPrice)
+
+	// Food
+	router.POST("/food/order", routes.CreateFoodOrder)
+	router.GET("/food/order/:id", routes.GetFoodOrder)
+	router.GET("/food/orders/:roomId", routes.GetFoodOrdersByRoom)
+	router.GET("/food/orders/guest/:guestId", routes.GetFoodOrdersByGuestID)
+	router.PUT("/order/:id", routes.UpdateFoodOrder)
+	router.DELETE("/order/:id", routes.DeleteFoodOrder)
+
+	router.POST("/food/menu", routes.CreateMenu)
+	router.GET("food/menus", routes.GetMenu)
+	router.GET("food/menu/:id", routes.GetMenuByID)
+	router.GET("food/menus/:foodName", routes.GetMenuByName)
+	router.PUT("/menu/:id", routes.UpdateMenu)
+	router.DELETE("/menu/:id", routes.DeleteMenu)
+
+	// Income Record
+	router.POST("/income", routes.AddIncome)
+	router.GET("income/today", routes.GetTodayIncome)
+	router.GET("income/date/:date", routes.GetIncomeByDate)
+
+	// Staff routes
+	router.POST("/staff/login", routes.StaffLogin)
+
+	// Protected staff routes
+	staffRoutes := router.Group("/staff")
+	staffRoutes.Use(routes.StaffAuthMiddleware())
+	{
+		staffRoutes.GET("/rooms", routes.GetRoomsForCleaning)
+		staffRoutes.POST("/cleaning/start", routes.StartCleaning)
+		staffRoutes.POST("/cleaning/complete", routes.CompleteCleaning)
+		staffRoutes.GET("/history", routes.GetStaffCleaningHistory)
+	}
 
 	protected := router.Group("/")
 	protected.Use(routes.AuthMiddleware())

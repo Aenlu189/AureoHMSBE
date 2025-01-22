@@ -42,7 +42,6 @@ func CreateReservation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create reservation: " + err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"message":     "Reservation created successfully",
 		"reservation": reservation,
@@ -67,7 +66,6 @@ func GetReservationsByDate(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, reservations)
 }
 
@@ -101,17 +99,15 @@ func DeleteReservation(c *gin.Context) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Reservation not found"})
 			return
-		} else {
-			c.JSON(http.StatusInternalServerError, err.Error())
-			return
 		}
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	if err := DB.Delete(&reservation).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to delete reservation"})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"message": "Reservation deleted successfully"})
 }
 
@@ -142,6 +138,5 @@ func UpdateReservation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, existingReservation)
 }
