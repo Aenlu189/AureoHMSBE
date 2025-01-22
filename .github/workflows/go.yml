@@ -17,6 +17,11 @@ jobs:
       with:
         go-version: '1.21'
 
+    - name: Install dependencies
+      run: |
+        go mod download
+        go mod tidy
+
     - name: Build
       run: go build -v ./...
 
@@ -29,8 +34,14 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
     - name: Build for Linux
       run: |
+        go mod download
         go mod tidy
         CGO_ENABLED=0 GOOS=linux go build -o main
 
@@ -40,7 +51,7 @@ jobs:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
         password: ${{ secrets.VPS_PASSWORD }}
-        source: "main,routes/*"
+        source: "main,routes/*,go.*"
         target: "/var/www/aureocloud/backend"
 
     - name: Start Application
@@ -50,8 +61,10 @@ jobs:
         username: ${{ secrets.VPS_USERNAME }}
         password: ${{ secrets.VPS_PASSWORD }}
         script: |
-          mkdir -p /var/www/aureocloud/backend
-          chmod +x /var/www/aureocloud/backend/main
+          cd /var/www/aureocloud/backend
+          go mod download
+          go mod tidy
+          chmod +x main
           
           # Create systemd service
           echo "[Unit]
