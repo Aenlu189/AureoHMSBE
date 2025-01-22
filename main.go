@@ -41,7 +41,12 @@ func main() {
 	router := gin.Default()
 
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://localhost:63343"}
+	config.AllowOrigins = []string{
+		"http://localhost:63343",
+		"http://87.106.203.188",
+		"http://87.106.203.188:80",
+		"http://87.106.203.188:3000",
+	}
 	config.AllowCredentials = true
 	config.AllowHeaders = []string{"Origin", "Content-length", "Content-Type", "Authorization"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
@@ -119,9 +124,9 @@ func main() {
 
 	protected.GET("/stats", routes.GetDashboardStats)
 
-	runErr := router.Run("localhost:8080")
+	runErr := router.Run(":8080")
 	if runErr != nil {
-		fmt.Printf("Localhost server not running")
+		fmt.Printf("Server failed to start: %v\n", runErr)
 		return
 	}
 }
