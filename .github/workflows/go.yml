@@ -47,7 +47,7 @@ jobs:
     - name: Debug Connection
       run: |
         echo "Testing connection to VPS..."
-        nc -zv ${{ secrets.VPS_HOST }} 80 || echo "Port 80 is not reachable"
+        nc -zv ${{ secrets.VPS_HOST }} 22 || echo "Port 22 is not reachable"
 
     - name: Deploy to VPS
       uses: appleboy/scp-action@master
