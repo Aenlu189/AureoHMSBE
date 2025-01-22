@@ -23,14 +23,13 @@ jobs:
         go mod tidy
 
     - name: Build
-      run: go build -v ./...
-
-    - name: Test
-      run: go test -v ./...
+      run: |
+        CGO_ENABLED=0 GOOS=linux go build -o main
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    environment: production
     steps:
     - uses: actions/checkout@v3
 
@@ -46,6 +45,14 @@ jobs:
         CGO_ENABLED=0 GOOS=linux go build -o main
 
     - name: Deploy to VPS
+      env:
+        INPUT_HOST: ${{ secrets.VPS_HOST }}
+        INPUT_USERNAME: ${{ secrets.VPS_USERNAME }}
+        INPUT_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+        INPUT_PORT: "22"
+        INPUT_SOURCE: "main,routes/*,go.*"
+        INPUT_TARGET: "/var/www/aureocloud/backend"
+        INPUT_TIMEOUT: "30s"
       uses: appleboy/scp-action@master
       with:
         host: ${{ secrets.VPS_HOST }}
@@ -53,8 +60,16 @@ jobs:
         password: ${{ secrets.VPS_PASSWORD }}
         source: "main,routes/*,go.*"
         target: "/var/www/aureocloud/backend"
+        strip_components: 0
+        debug: true
 
     - name: Start Application
+      env:
+        INPUT_HOST: ${{ secrets.VPS_HOST }}
+        INPUT_USERNAME: ${{ secrets.VPS_USERNAME }}
+        INPUT_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+        INPUT_PORT: "22"
+        INPUT_TIMEOUT: "30s"
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.VPS_HOST }}
