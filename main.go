@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	dsn := "root:Hninhninlatt21@tcp(127.0.0.1:3306)/Aureo_Cloud?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := "Aenlu:Hninhninlatt21!@tcp(87.106.203.188:3306)/Aureo_Cloud?charset=utf8mb4&parseTime=True&loc=Local"
 	var err error
 	routes.DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {

@@ -20,7 +20,6 @@ type Claims struct {
 }
 
 func GenerateToken(userID uint, email string, role string) (string, error) {
-	// Create the Claims
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
@@ -31,10 +30,8 @@ func GenerateToken(userID uint, email string, role string) (string, error) {
 		},
 	}
 
-	// Create token with claims
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// Generate encoded token
 	return token.SignedString(jwtSecret)
 }
 
