@@ -25,73 +25,24 @@ jobs:
     - name: Build
       run: |
         CGO_ENABLED=0 GOOS=linux go build -o main
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
-
-    - name: Build for Linux
-      run: |
-        go mod download
-        go mod tidy
-        CGO_ENABLED=0 GOOS=linux go build -o main
+        chmod +x main
 
     - name: Debug Connection
       run: |
         echo "Testing connection to VPS..."
-        nc -zv ${{ secrets.VPS_HOST }} 22 || echo "Port 22 is not reachable"
+        nc -zv ${{ secrets.VPS_HOST }} 21 || echo "Port 21 is not reachable"
         ping -c 4 ${{ secrets.VPS_HOST }} || echo "Cannot ping host"
 
-    - name: Deploy Files
-      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+    - name: Deploy via FTP
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
-        username: ${{ secrets.VPS_USERNAME }}
         server: ${{ secrets.VPS_HOST }}
-        password: ${{ secrets.VPS_PASSWORD }}
-        port: 22
-        local_path: './main,./routes/*,./go.*'
-        remote_path: '/var/www/aureocloud/backend'
-        sftp_only: true
-        delete_remote_files: false
-
-    - name: Start Application
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USERNAME }}
         password: ${{ secrets.VPS_PASSWORD }}
-        command_timeout: 30m
-        script: |
-          cd /var/www/aureocloud/backend
-          go mod download
-          go mod tidy
-          chmod +x main
-          
-          # Create systemd service
-          echo "[Unit]
-          Description=Aureo HMS Backend
-          After=network.target
-
-          [Service]
-          Type=simple
-          User=root
-          WorkingDirectory=/var/www/aureocloud/backend
-          ExecStart=/var/www/aureocloud/backend/main
-          Restart=always
-          Environment=GIN_MODE=release
-
-          [Install]
-          WantedBy=multi-user.target" > /etc/systemd/system/aureobackend.service
-          
-          # Reload and restart service
-          systemctl daemon-reload
-          systemctl enable aureobackend
-          systemctl restart aureobackend
+        local-dir: ./
+        server-dir: /var/www/aureocloud/backend/
+        exclude: |
+          **/.git*
+          **/.git*/**
+          **/node_modules/**
+          **/.github/**
