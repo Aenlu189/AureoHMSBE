@@ -1,0 +1,75 @@
+name: Go Backend Deployment
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Build for Linux
+      run: |
+        go mod tidy
+        CGO_ENABLED=0 GOOS=linux go build -o main
+
+    - name: Deploy to VPS
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        password: ${{ secrets.VPS_PASSWORD }}
+        source: "main,routes/*"
+        target: "/var/www/aureocloud/backend"
+
+    - name: Start Application
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USERNAME }}
+        password: ${{ secrets.VPS_PASSWORD }}
+        script: |
+          mkdir -p /var/www/aureocloud/backend
+          chmod +x /var/www/aureocloud/backend/main
+          
+          # Create systemd service
+          echo "[Unit]
+          Description=Aureo HMS Backend
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=root
+          WorkingDirectory=/var/www/aureocloud/backend
+          ExecStart=/var/www/aureocloud/backend/main
+          Restart=always
+          Environment=GIN_MODE=release
+
+          [Install]
+          WantedBy=multi-user.target" > /etc/systemd/system/aureobackend.service
+          
+          # Reload and restart service
+          systemctl daemon-reload
+          systemctl enable aureobackend
+          systemctl restart aureobackend
