@@ -58,8 +58,7 @@ func main() {
 		MaxAge:   3600 * 24,
 		HttpOnly: true,
 		Secure:   false,
-		Domain:   "87.106.203.188",
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteStrictMode,
 	})
 	router.Use(sessions.Sessions("mysession", store))
 
