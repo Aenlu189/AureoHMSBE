@@ -8,8 +8,6 @@ import (
 	"os"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -45,40 +43,25 @@ func main() {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://aureocloud.co.uk"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Cookie", "Set-Cookie"},
-		ExposeHeaders:    []string{"Set-Cookie"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-
-	// Setup session store with debug logging
-	store := cookie.NewStore([]byte("debug-secret-key"))
-	store.Options(sessions.Options{
-		Path:     "/",
-		Domain:   "aureocloud.co.uk",
-		MaxAge:   86400,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
-	})
 
 	// Add logging middleware
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
 		Output: os.Stdout,
 		Formatter: func(param gin.LogFormatterParams) string {
-			return fmt.Sprintf("[GIN] %v | %3d | %13v | %15s | %-7s %s | Cookie: %s\n",
+			return fmt.Sprintf("[GIN] %v | %3d | %13v | %15s | %-7s %s\n",
 				param.TimeStamp.Format("2006/01/02 - 15:04:05"),
 				param.StatusCode,
 				param.Latency,
 				param.ClientIP,
 				param.Method,
 				param.Path,
-				param.Request.Header.Get("Cookie"),
 			)
 		},
 	}))
-
-	router.Use(sessions.Sessions("mysession", store))
 
 	// Public routes
 	router.POST("/login", routes.Login)
