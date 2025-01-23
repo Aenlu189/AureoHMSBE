@@ -151,7 +151,6 @@ func UpdatePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Password updated successfully"})
 }
 
-func SetupSessionStore(router *gin.Engine) {
-	store := cookie.NewStore([]byte("secret"))
-	router.Use(sessions.Sessions("my_session", store))
+func SetupSessionStore(router *gin.Engine, store sessions.Store) {
+	router.Use(sessions.Sessions("mysession", store))
 }

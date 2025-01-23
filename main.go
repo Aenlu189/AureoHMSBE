@@ -6,9 +6,12 @@ import (
 	"log"
 
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"net/http"
 )
 
 func main() {
@@ -39,14 +42,24 @@ func main() {
 
 	// Setup CORS
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:63343", "http://127.0.0.1:63343", "http://87.106.203.188", "http://aureocloud.co.uk", "http://www.aureocloud.co.uk"},
+		AllowOrigins:     []string{"http://aureocloud.co.uk", "https://aureocloud.co.uk", "http://www.aureocloud.co.uk", "https://www.aureocloud.co.uk"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		AllowCredentials: true,
+		MaxAge:           300,
 	}))
 
 	// Setup session store
-	routes.SetupSessionStore(router)
+	store := cookie.NewStore([]byte("your-secret-key"))
+	store.Options(sessions.Options{
+		Path:     "/",
+		Domain:   ".aureocloud.co.uk", // Note the dot prefix to include subdomains
+		MaxAge:   3600 * 24,           // 24 hours
+		Secure:   true,                // Enable for HTTPS
+		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode, // Required for cross-domain
+	})
+	routes.SetupSessionStore(router, store)
 
 	// Public routes
 	router.POST("/login", routes.Login)
