@@ -7,8 +7,6 @@ import (
 	"net/http"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -40,6 +38,7 @@ func main() {
 
 	router := gin.Default()
 
+	// CORS configuration
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{
 		"http://localhost:63343",
@@ -54,43 +53,14 @@ func main() {
 		"Content-Length",
 		"Content-Type",
 		"Authorization",
-		"Accept",
-		"Cookie",
-		"Set-Cookie",
 	}
-	config.ExposeHeaders = []string{"Set-Cookie"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	router.Use(cors.New(config))
-
-	// Create a new cookie store with a secure key
-	store := cookie.NewStore([]byte("AureoHMS-Session-Key-2025-01-23"))
-
-	// Configure session middleware
-	router.Use(sessions.Sessions("mysession", store))
-
-	// Add session middleware with appropriate settings
-	router.Use(func(c *gin.Context) {
-		session := sessions.Default(c)
-		origin := c.GetHeader("Origin")
-		fmt.Printf("Request Origin: %s\n", origin)
-
-		options := sessions.Options{
-			Path:     "/",
-			MaxAge:   3600 * 24,
-			HttpOnly: true,
-			Secure:   false, // Set to false since we're not using HTTPS
-			Domain:   "",    // Empty to allow the browser to handle it
-			SameSite: http.SameSiteLaxMode,
-		}
-
-		session.Options(options)
-		c.Next()
-	})
 
 	// Authentication
 	router.POST("/login", routes.Login)
 	router.POST("/logout", routes.Logout)
-	router.GET("/check-session", routes.CheckSession)
+	router.GET("/check-session", routes.CheckAuth)
 
 	// Reservation
 	router.POST("/create-reservation", routes.CreateReservation)

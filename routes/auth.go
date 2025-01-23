@@ -2,8 +2,6 @@ package routes
 
 import (
 	"errors"
-	"fmt"
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"net/http"
@@ -18,6 +16,7 @@ type Receptionist struct {
 }
 
 var DB *gorm.DB
+var jwtKey = []byte("secret_key")
 
 func Login(c *gin.Context) {
 	var requestData struct {
@@ -46,30 +45,16 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	session := sessions.Default(c)
-	// Clear any existing session
-	session.Clear()
-	if err := session.Save(); err != nil {
-		fmt.Printf("Error clearing session: %v\n", err)
-	}
-
-	fmt.Printf("Login - Before setting session for user: %s\n", user.Username)
-
-	// Set session data
-	session.Set("user", user.Username)
-	session.Set("userID", user.ID)
-
-	// Save immediately
-	if err := session.Save(); err != nil {
-		fmt.Printf("Error saving session: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating session"})
+	// Generate JWT token
+	token, err := GenerateToken(uint(user.ID), user.Email, "receptionist")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error generating token"})
 		return
 	}
 
-	fmt.Printf("Login - After setting session. Session data: %v\n", session.Get("user"))
-
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
+		"token":   token,
 		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
@@ -79,36 +64,32 @@ func Login(c *gin.Context) {
 }
 
 func Logout(c *gin.Context) {
-	session := sessions.Default(c)
-	session.Clear()
-	fmt.Println("Session has been cleared")
-
-	user := session.Get("user")
-	if err := session.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to clear session"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
-	fmt.Println("Logged out successfully")
-	fmt.Println("Session user: ", user)
+	// With JWT, we don't need to do anything server-side
+	// The client should remove the token
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
-func CheckSession(c *gin.Context) {
-	session := sessions.Default(c)
-	username := session.Get("user")
-	userID := session.Get("userID")
-
-	fmt.Printf("CheckSession - Session data: user=%v, userID=%v\n", username, userID)
-
-	if username == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Not logged in"})
+func CheckAuth(c *gin.Context) {
+	// Get token from Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "No token provided"})
 		return
 	}
 
-	// Get user details from database
+	// Remove "Bearer " prefix
+	tokenString := authHeader[7:]
+
+	// Validate token
+	claims, err := ValidateToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+		return
+	}
+
+	// Get user details
 	var user Receptionist
-	result := DB.Where("username = ?", username).First(&user)
+	result := DB.First(&user, claims.UserID)
 	if result.Error != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "User not found"})
 		return
@@ -122,17 +103,4 @@ func CheckSession(c *gin.Context) {
 			"name":     user.Name,
 		},
 	})
-}
-
-func AuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		session := sessions.Default(c)
-		user := session.Get("user")
-		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
 }
