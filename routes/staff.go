@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"net/http"
@@ -28,6 +29,29 @@ type CleaningRecord struct {
 	Status     string `gorm:"type:enum('IN_PROGRESS','COMPLETED');default:'IN_PROGRESS'"`
 }
 
+// StaffClaims extends the standard JWT claims with staff-specific fields
+type StaffClaims struct {
+	UserID   uint   `json:"user_id"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	jwt.StandardClaims
+}
+
+func generateStaffToken(staff *Staff) (string, error) {
+	claims := StaffClaims{
+		UserID:   staff.ID,
+		Username: staff.Username,
+		Role:     staff.Role,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
+			IssuedAt:  time.Now().Unix(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtKey) // Using the same key from auth.go
+}
+
 func StaffLogin(c *gin.Context) {
 	var requestData struct {
 		Username string `json:"username"`
@@ -43,9 +67,9 @@ func StaffLogin(c *gin.Context) {
 	result := DB.Where("username = ?", requestData.Username).First(&staff)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"message": "Invalid username or password"})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": result.Error.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
 		}
 		return
 	}
@@ -55,14 +79,15 @@ func StaffLogin(c *gin.Context) {
 		return
 	}
 
-	token, err := GenerateToken(staff.ID, staff.Email, staff.Role)
+	token, err := generateStaffToken(&staff)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to generate token"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"token": token,
+		"message": "Login successful",
+		"token":   token,
 		"staff": gin.H{
 			"id":       staff.ID,
 			"name":     staff.Name,
@@ -73,6 +98,13 @@ func StaffLogin(c *gin.Context) {
 }
 
 func GetRoomsForCleaning(c *gin.Context) {
+	// Get staff ID from context (set by AuthMiddleware)
+	staffID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		return
+	}
+
 	var rooms []Rooms
 	if err := DB.Where("status = ? OR status = ?", 5, 7).Find(&rooms).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch rooms"})
@@ -99,17 +131,29 @@ func GetRoomsForCleaning(c *gin.Context) {
 		}
 
 		if record, exists := cleaningMap[room.Room]; exists {
-			roomData["cleaning_start"] = record.StartTime
-			roomData["staff_id"] = record.StaffID
+			roomData["cleaning_status"] = record.Status
+			roomData["cleaning_start_time"] = record.StartTime
+			if record.StaffID == staffID.(uint) {
+				roomData["assigned_to_me"] = true
+			}
 		}
 
 		response = append(response, roomData)
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{
+		"rooms": response,
+	})
 }
 
 func StartCleaning(c *gin.Context) {
+	// Get staff ID from context (set by AuthMiddleware)
+	staffID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		return
+	}
+
 	var request struct {
 		RoomNumber string `json:"room_number"`
 	}
@@ -118,8 +162,6 @@ func StartCleaning(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
-
-	staffID := c.GetUint("staff_id") // From JWT middleware
 
 	tx := DB.Begin()
 
@@ -131,7 +173,7 @@ func StartCleaning(c *gin.Context) {
 
 	cleaningRecord := CleaningRecord{
 		RoomNumber: request.RoomNumber,
-		StaffID:    staffID,
+		StaffID:    staffID.(uint),
 		StartTime:  time.Now(),
 		Status:     "IN_PROGRESS",
 	}
@@ -147,6 +189,13 @@ func StartCleaning(c *gin.Context) {
 }
 
 func CompleteCleaning(c *gin.Context) {
+	// Get staff ID from context (set by AuthMiddleware)
+	staffID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		return
+	}
+
 	var request struct {
 		RoomNumber string `json:"room_number"`
 	}
@@ -155,8 +204,6 @@ func CompleteCleaning(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
-
-	staffID := c.GetUint("staff_id") // From JWT middleware
 
 	tx := DB.Begin()
 
@@ -183,7 +230,12 @@ func CompleteCleaning(c *gin.Context) {
 }
 
 func GetStaffCleaningHistory(c *gin.Context) {
-	staffID := c.GetUint("staff_id")
+	// Get staff ID from context (set by AuthMiddleware)
+	staffID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		return
+	}
 
 	var records []CleaningRecord
 	if err := DB.Where("staff_id = ?", staffID).

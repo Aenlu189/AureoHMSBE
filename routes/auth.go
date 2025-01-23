@@ -2,9 +2,12 @@ package routes
 
 import (
 	"errors"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"net/http"
+	"strings"
+	"time"
 )
 
 type Receptionist struct {
@@ -16,7 +19,43 @@ type Receptionist struct {
 }
 
 var DB *gorm.DB
-var jwtKey = []byte("secret_key")
+var jwtKey = []byte("AureoHMS-Secret-Key") // In production, use environment variable
+
+type Claims struct {
+	UserID   int    `json:"user_id"`
+	Username string `json:"username"`
+	jwt.StandardClaims
+}
+
+func generateToken(user *Receptionist) (string, error) {
+	claims := Claims{
+		UserID:   user.ID,
+		Username: user.Username,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
+			IssuedAt:  time.Now().Unix(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtKey)
+}
+
+func validateToken(tokenString string) (*Claims, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	if !token.Valid {
+		return nil, errors.New("invalid token")
+	}
+
+	return claims, nil
+}
 
 func Login(c *gin.Context) {
 	var requestData struct {
@@ -33,9 +72,9 @@ func Login(c *gin.Context) {
 	result := DB.Where("username = ?", requestData.Username).First(&user)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"message": "Invalid username or password"})
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": result.Error.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
 		}
 		return
 	}
@@ -45,8 +84,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Generate JWT token
-	token, err := GenerateToken(uint(user.ID), user.Email, "receptionist")
+	token, err := generateToken(&user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error generating token"})
 		return
@@ -64,30 +102,28 @@ func Login(c *gin.Context) {
 }
 
 func Logout(c *gin.Context) {
-	// With JWT, we don't need to do anything server-side
-	// The client should remove the token
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
 func CheckAuth(c *gin.Context) {
-	// Get token from Authorization header
 	authHeader := c.GetHeader("Authorization")
 	if authHeader == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "No token provided"})
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Authorization header required"})
 		return
 	}
 
-	// Remove "Bearer " prefix
-	tokenString := authHeader[7:]
+	tokenParts := strings.Split(authHeader, " ")
+	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid authorization format"})
+		return
+	}
 
-	// Validate token
-	claims, err := ValidateToken(tokenString)
+	claims, err := validateToken(tokenParts[1])
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
 		return
 	}
 
-	// Get user details
 	var user Receptionist
 	result := DB.First(&user, claims.UserID)
 	if result.Error != nil {
@@ -103,4 +139,34 @@ func CheckAuth(c *gin.Context) {
 			"name":     user.Name,
 		},
 	})
+}
+
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Authorization header required"})
+			c.Abort()
+			return
+		}
+
+		tokenParts := strings.Split(authHeader, " ")
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid authorization format"})
+			c.Abort()
+			return
+		}
+
+		claims, err := validateToken(tokenParts[1])
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		// Add user info to context
+		c.Set("user_id", claims.UserID)
+		c.Set("username", claims.Username)
+		c.Next()
+	}
 }

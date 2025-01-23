@@ -4,7 +4,6 @@ import (
 	"AureoHMSBE/routes"
 	"fmt"
 	"log"
-	"net/http"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -57,71 +56,68 @@ func main() {
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	router.Use(cors.New(config))
 
-	// Authentication
+	// Public routes
 	router.POST("/login", routes.Login)
 	router.POST("/logout", routes.Logout)
 	router.GET("/check-session", routes.CheckAuth)
 
-	// Reservation
-	router.POST("/create-reservation", routes.CreateReservation)
-	router.GET("reservations/date/:date", routes.GetReservationsByDate)
-	router.GET("reservations/:id", routes.GetReservation)
-	router.DELETE("reservations/:id", routes.DeleteReservation)
-	router.PUT("reservations/:id", routes.UpdateReservation)
-
-	//Rooms
-	router.GET("/rooms", routes.GetRooms)
-	router.GET("/rooms/:room", routes.GetRoom)
-	router.PUT("rooms/:room", routes.UpdateRoomStatus)
-
-	//Guests
-	router.POST("/create-guest", routes.CreateGuest)
-	router.GET("/guests/current/:roomNumber", routes.GetCurrentGuest)
-	router.GET("/guests/checkouts/today", routes.GetTodayCheckouts)
-	router.PUT("/guests/:id", routes.UpdateGuestInfo)
-	router.PUT("/guests/foodPrice/:id", routes.UpdateGuestFoodPrice)
-
-	// Food
-	router.POST("/food/order", routes.CreateFoodOrder)
-	router.GET("/food/order/:id", routes.GetFoodOrder)
-	router.GET("/food/orders/:roomId", routes.GetFoodOrdersByRoom)
-	router.GET("/food/orders/guest/:guestId", routes.GetFoodOrdersByGuestID)
-	router.PUT("/order/:id", routes.UpdateFoodOrder)
-	router.DELETE("/order/:id", routes.DeleteFoodOrder)
-
-	router.POST("/food/menu", routes.CreateMenu)
-	router.GET("food/menus", routes.GetMenu)
-	router.GET("food/menu/:id", routes.GetMenuByID)
-	router.GET("food/menus/:foodName", routes.GetMenuByName)
-	router.PUT("/menu/:id", routes.UpdateMenu)
-	router.DELETE("/menu/:id", routes.DeleteMenu)
-
-	// Income Record
-	router.POST("/income", routes.AddIncome)
-	router.GET("income/today", routes.GetTodayIncome)
-	router.GET("income/date/:date", routes.GetIncomeByDate)
-
-	// Staff routes
-	router.POST("/staff/login", routes.StaffLogin)
-
-	// Protected staff routes
-	staffRoutes := router.Group("/staff")
-	staffRoutes.Use(routes.StaffAuthMiddleware())
+	// Protected routes
+	authorized := router.Group("/")
+	authorized.Use(routes.AuthMiddleware())
 	{
-		staffRoutes.GET("/rooms", routes.GetRoomsForCleaning)
-		staffRoutes.POST("/cleaning/start", routes.StartCleaning)
-		staffRoutes.POST("/cleaning/complete", routes.CompleteCleaning)
-		staffRoutes.GET("/history", routes.GetStaffCleaningHistory)
+		// Stats
+		authorized.GET("/stats", routes.GetDashboardStats)
+
+		// Reservations
+		authorized.POST("/create-reservation", routes.CreateReservation)
+		authorized.GET("/reservations/date/:date", routes.GetReservationsByDate)
+		authorized.GET("/reservations/:id", routes.GetReservation)
+		authorized.PUT("/reservations/:id", routes.UpdateReservation)
+		authorized.DELETE("/reservations/:id", routes.DeleteReservation)
+
+		// Rooms
+		authorized.GET("/rooms", routes.GetRooms)
+		authorized.GET("/rooms/:room", routes.GetRoom)
+		authorized.PUT("/rooms/:room", routes.UpdateRoomStatus)
+
+		// Guests
+		authorized.POST("/create-guest", routes.CreateGuest)
+		authorized.GET("/guests/current/:roomNumber", routes.GetCurrentGuest)
+		authorized.GET("/guests/checkouts/today", routes.GetTodayCheckouts)
+		authorized.PUT("/guests/:id", routes.UpdateGuestInfo)
+		authorized.PUT("/guests/foodPrice/:id", routes.UpdateGuestFoodPrice)
+
+		// Food Orders
+		authorized.POST("/food/order", routes.CreateFoodOrder)
+		authorized.GET("/food/order/:id", routes.GetFoodOrder)
+		authorized.GET("/food/orders/:roomId", routes.GetFoodOrdersByRoom)
+		authorized.GET("/food/orders/guest/:guestId", routes.GetFoodOrdersByGuestID)
+		authorized.PUT("/order/:id", routes.UpdateFoodOrder)
+		authorized.DELETE("/order/:id", routes.DeleteFoodOrder)
+
+		// Menu
+		authorized.POST("/food/menu", routes.CreateMenu)
+		authorized.GET("/food/menus", routes.GetMenu)
+		authorized.GET("/food/menu/:id", routes.GetMenuByID)
+		authorized.GET("/food/menus/:foodName", routes.GetMenuByName)
+		authorized.PUT("/menu/:id", routes.UpdateMenu)
+		authorized.DELETE("/menu/:id", routes.DeleteMenu)
+
+		// Income
+		authorized.POST("/income", routes.AddIncome)
+		authorized.GET("/income/today", routes.GetTodayIncome)
+		authorized.GET("/income/date/:date", routes.GetIncomeByDate)
+
+		// Staff
+		authorized.POST("/staff/login", routes.StaffLogin)
+		authorized.GET("/staff/rooms", routes.GetRoomsForCleaning)
+		authorized.POST("/staff/cleaning/start", routes.StartCleaning)
+		authorized.POST("/staff/cleaning/complete", routes.CompleteCleaning)
+		authorized.GET("/staff/history", routes.GetStaffCleaningHistory)
 	}
 
-	protected := router.Group("/")
-	protected.Use(routes.AuthMiddleware())
-
-	protected.GET("/stats", routes.GetDashboardStats)
-
-	runErr := router.Run(":8080")
-	if runErr != nil {
-		fmt.Printf("Server failed to start: %v\n", runErr)
-		return
+	err = router.Run(":8080")
+	if err != nil {
+		log.Fatal("Failed to start server:", err)
 	}
 }
