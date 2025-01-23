@@ -41,24 +41,23 @@ func main() {
 
 	router := gin.Default()
 
-	// Setup CORS
+	// Add CORS middleware before any routes
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://aureocloud.co.uk"},
+		AllowOrigins:     []string{"*"}, // Allow all origins for debugging
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "Cookie", "Set-Cookie"},
-		ExposeHeaders:    []string{"Content-Length", "Set-Cookie"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
+		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
-		MaxAge:           12 * 60 * 60, // 12 hours
+		MaxAge:           12 * 60 * 60,
 	}))
 
-	// Setup session store
+	// Setup session store with minimal options
 	store := cookie.NewStore([]byte("your-secret-key"))
 	store.Options(sessions.Options{
 		Path:     "/",
-		Domain:   "aureocloud.co.uk",
-		MaxAge:   86400, // 24 hours
-		Secure:   false, // Set to true in production with HTTPS
+		MaxAge:   86400,
 		HttpOnly: true,
+		Secure:   false,
 		SameSite: http.SameSiteLaxMode,
 	})
 
