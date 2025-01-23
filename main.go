@@ -4,9 +4,12 @@ import (
 	"AureoHMSBE/routes"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -42,10 +45,25 @@ func main() {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://aureocloud.co.uk"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Cookie", "Set-Cookie"},
+		ExposeHeaders:    []string{"Set-Cookie"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
+
+	// Setup session store
+	store := cookie.NewStore([]byte("your-secret-key"))
+	store.Options(sessions.Options{
+		Path:     "/",
+		Domain:   "aureocloud.co.uk",
+		MaxAge:   86400, // 24 hours
+		Secure:   false, // Set to true in production with HTTPS
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Use session middleware
+	router.Use(sessions.Sessions("mysession", store))
 
 	// Add logging middleware
 	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{

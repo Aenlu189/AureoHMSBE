@@ -2,29 +2,36 @@ package routes
 
 import (
 	"errors"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"log"
 	"net/http"
 )
 
-type Receptionist struct {
-	ID       int    `gorm:"primaryKey"`
-	Name     string `gorm:"not null"`
-	Email    string `gorm:"not null"`
-	Username string `gorm:"unique: not null"`
-	Password string `gorm:"not null"`
-}
-
 var DB *gorm.DB
 
-func Login(c *gin.Context) {
-	var requestData struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
+func InitializeDB(db *gorm.DB) {
+	DB = db
+}
 
-	if err := c.BindJSON(&requestData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+type LoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type Receptionist struct {
+	ID       uint   `json:"id"`
+	Username string `json:"username"`
+	Password string `json:"-"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+}
+
+func Login(c *gin.Context) {
+	var requestData LoginRequest
+	if err := c.ShouldBindJSON(&requestData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request data"})
 		return
 	}
 
@@ -33,9 +40,9 @@ func Login(c *gin.Context) {
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
 		return
 	}
 
@@ -44,28 +51,86 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	// Set session
+	session := sessions.Default(c)
+	session.Clear()
+	session.Set("user_id", user.ID)
+	session.Set("username", user.Username)
+	session.Set("authenticated", true)
+
+	log.Printf("Setting session for user: %v", user.Username)
+
+	if err := session.Save(); err != nil {
+		log.Printf("Error saving session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error saving session"})
+		return
+	}
+
+	log.Printf("Session saved successfully")
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
 		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
 			"name":     user.Name,
+			"email":    user.Email,
 		},
 	})
 }
 
 func Logout(c *gin.Context) {
+	session := sessions.Default(c)
+	session.Clear()
+	session.Save()
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
 func CheckAuth(c *gin.Context) {
-	// Frontend will handle auth check
-	c.JSON(http.StatusOK, gin.H{"message": "Use client-side auth"})
+	session := sessions.Default(c)
+	userID := session.Get("user_id")
+	authenticated := session.Get("authenticated")
+
+	if userID == nil || authenticated == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Not authenticated"})
+		return
+	}
+
+	var user Receptionist
+	result := DB.First(&user, userID)
+	if result.Error != nil {
+		session.Clear()
+		session.Save()
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Authenticated",
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"name":     user.Name,
+			"email":    user.Email,
+		},
+	})
 }
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Frontend will handle auth
+		session := sessions.Default(c)
+		userID := session.Get("user_id")
+		authenticated := session.Get("authenticated")
+
+		if userID == nil || authenticated == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Not authenticated"})
+			c.Abort()
+			return
+		}
+
+		// Add user info to context
+		c.Set("user_id", userID)
+		c.Set("username", session.Get("username"))
 		c.Next()
 	}
 }
