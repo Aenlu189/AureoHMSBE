@@ -44,11 +44,11 @@ func main() {
 	// Setup CORS
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://aureocloud.co.uk"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Cookie", "Set-Cookie"},
-		ExposeHeaders:    []string{"Set-Cookie"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "Cookie", "Set-Cookie"},
+		ExposeHeaders:    []string{"Content-Length", "Set-Cookie"},
 		AllowCredentials: true,
-		MaxAge:           300,
+		MaxAge:           12 * 60 * 60, // 12 hours
 	}))
 
 	// Setup session store
