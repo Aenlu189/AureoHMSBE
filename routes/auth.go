@@ -45,14 +45,10 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Set session values
+	// Set simple session
 	session := sessions.Default(c)
 	session.Set("user_id", user.ID)
-	session.Set("username", user.Username)
-	if err := session.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error saving session"})
-		return
-	}
+	session.Save()
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
