@@ -43,11 +43,11 @@ func main() {
 
 	// Add CORS middleware before any routes
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"}, // Allow all origins for debugging
+		AllowOrigins:     []string{"http://aureocloud.co.uk"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: false,
+		AllowCredentials: true,
 		MaxAge:           12 * 60 * 60,
 	}))
 
@@ -58,6 +58,7 @@ func main() {
 		MaxAge:   86400,
 		HttpOnly: true,
 		Secure:   false,
+		Domain:   "aureocloud.co.uk",
 		SameSite: http.SameSiteLaxMode,
 	})
 
