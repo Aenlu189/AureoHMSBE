@@ -43,6 +43,7 @@ func main() {
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{
 		"http://localhost:63343",
+		"http://127.0.0.1:63343",
 		"http://87.106.203.188",
 		"http://87.106.203.188:80",
 		"http://87.106.203.188:8080",
@@ -62,7 +63,7 @@ func main() {
 	router.Use(cors.New(config))
 
 	// Create a new cookie store with a secure key
-	store := cookie.NewStore([]byte("AureoHMS-Session-Key-2025-01-23")) // Use a strong, unique key
+	store := cookie.NewStore([]byte("AureoHMS-Session-Key-2025-01-23"))
 
 	// Configure session middleware
 	router.Use(sessions.Sessions("mysession", store))
@@ -70,24 +71,15 @@ func main() {
 	// Add session middleware with appropriate settings
 	router.Use(func(c *gin.Context) {
 		session := sessions.Default(c)
+		origin := c.GetHeader("Origin")
+		fmt.Printf("Request Origin: %s\n", origin)
 
-		// Get the host from the request
-		host := c.Request.Host
-		fmt.Printf("Request Host: %s\n", host)
-
-		// Set session options based on the host
 		options := sessions.Options{
 			Path:     "/",
 			MaxAge:   3600 * 24,
 			HttpOnly: true,
 			Secure:   false,
-			SameSite: http.SameSiteLaxMode,
-		}
-
-		// Set domain for production
-		if host == "87.106.203.188:8080" {
-			options.Domain = "87.106.203.188"
-			fmt.Printf("Setting production domain: %s\n", options.Domain)
+			SameSite: http.SameSiteNoneMode,
 		}
 
 		session.Options(options)

@@ -48,7 +48,7 @@ func Login(c *gin.Context) {
 
 	session := sessions.Default(c)
 	fmt.Printf("Login - Before setting session for user: %s\n", user.Username)
-	fmt.Printf("Login - Request Host: %s\n", c.Request.Host)
+	fmt.Printf("Login - Request Origin: %s\n", c.GetHeader("Origin"))
 
 	session.Clear()
 
@@ -59,7 +59,7 @@ func Login(c *gin.Context) {
 		MaxAge:   3600 * 24,
 		HttpOnly: true,
 		Secure:   false,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteNoneMode,
 	}
 
 	if host == "87.106.203.188:8080" {
