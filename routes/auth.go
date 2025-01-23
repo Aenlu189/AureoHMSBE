@@ -47,13 +47,26 @@ func Login(c *gin.Context) {
 	}
 
 	session := sessions.Default(c)
+	fmt.Printf("Login - Before setting session for user: %s\n", user.Username)
+
+	session.Clear()
 	session.Set("user", user.Username)
+
 	if err := session.Save(); err != nil {
+		fmt.Printf("Failed to save session: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to save session"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Login successful!"})
+	// Verify session was saved
+	savedUser := session.Get("user")
+	fmt.Printf("Login - After saving session. Saved user: %v\n", savedUser)
+	fmt.Printf("Login - Response Headers: %v\n", c.Writer.Header())
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "Login successful!",
+		"username": user.Username,
+	})
 }
 
 func Logout(c *gin.Context) {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
@@ -50,41 +49,52 @@ func main() {
 		"http://87.106.203.188:3000",
 	}
 	config.AllowCredentials = true
-	config.AllowHeaders = []string{"Origin", "Content-length", "Content-Type", "Authorization", "Accept"}
+	config.AllowHeaders = []string{
+		"Origin",
+		"Content-Length",
+		"Content-Type",
+		"Authorization",
+		"Accept",
+		"Cookie",
+	}
+	config.ExposeHeaders = []string{"Set-Cookie"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	router.Use(cors.New(config))
 
-	store := cookie.NewStore([]byte("secret"))
-	isProduction := os.Getenv("GIN_MODE") == "release"
-	var sessionOptions sessions.Options
-	if isProduction {
-		sessionOptions = sessions.Options{
-			Path:     "/",
-			MaxAge:   3600 * 24,
-			HttpOnly: true,
-			Secure:   true,
-			Domain:   "87.106.203.188",
-			SameSite: http.SameSiteNoneMode,
-		}
-	} else {
-		sessionOptions = sessions.Options{
+	// Create a new cookie store with a secure key
+	store := cookie.NewStore([]byte("AureoHMS-Session-Key-2025-01-23")) // Use a strong, unique key
+
+	// Configure session middleware
+	router.Use(sessions.Sessions("mysession", store))
+
+	// Add session middleware with appropriate settings
+	router.Use(func(c *gin.Context) {
+		session := sessions.Default(c)
+		session.Options(sessions.Options{
 			Path:     "/",
 			MaxAge:   3600 * 24,
 			HttpOnly: true,
 			Secure:   false,
-			SameSite: http.SameSiteStrictMode,
-		}
-	}
-
-	store.Options(sessionOptions)
-	router.Use(sessions.Sessions("mysession", store))
+			SameSite: http.SameSiteLaxMode,
+		})
+		c.Next()
+	})
 
 	// Authentication
 	router.POST("/login", routes.Login)
 	router.POST("/logout", routes.Logout)
-	router.POST("/forgot-password", routes.ForgotPassword)
-	router.POST("/admin", routes.AdminLogin)
-	router.GET("/check-session", checkSession)
+	router.GET("/check-session", func(c *gin.Context) {
+		session := sessions.Default(c)
+		user := session.Get("user")
+		fmt.Printf("Check Session - Current user: %v\n", user)
+		fmt.Printf("Request Headers: %v\n", c.Request.Header)
+
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Not logged in"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Logged in", "user": user})
+	})
 
 	// Reservation
 	router.POST("/create-reservation", routes.CreateReservation)
@@ -147,17 +157,5 @@ func main() {
 	if runErr != nil {
 		fmt.Printf("Server failed to start: %v\n", runErr)
 		return
-	}
-}
-
-func checkSession(c *gin.Context) {
-	session := sessions.Default(c)
-	user := session.Get("user")
-	fmt.Println("Session user: ", user)
-
-	if user == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Not logged in"})
-	} else {
-		c.JSON(http.StatusOK, gin.H{"message": user})
 	}
 }
