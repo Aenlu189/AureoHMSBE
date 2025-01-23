@@ -46,6 +46,7 @@ func main() {
 		"http://localhost:63343",
 		"http://87.106.203.188",
 		"http://87.106.203.188:80",
+		"http://87.106.203.188:8080",
 		"http://87.106.203.188:3000",
 	}
 	config.AllowCredentials = true
