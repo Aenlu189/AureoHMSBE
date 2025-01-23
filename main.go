@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
@@ -42,25 +43,25 @@ func main() {
 
 	// Setup CORS
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://aureocloud.co.uk", "https://aureocloud.co.uk"},
+		AllowOrigins:     []string{"https://aureocloud.co.uk"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Cookie", "Set-Cookie"},
 		ExposeHeaders:    []string{"Set-Cookie"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 
 	// Setup session store
-	store := cookie.NewStore([]byte("secret"))
+	store := cookie.NewStore([]byte(os.Getenv("SESSION_SECRET"))) // Use environment variable for secret
 	store.Options(sessions.Options{
 		Path:     "/",
 		Domain:   "aureocloud.co.uk",
 		MaxAge:   86400, // 24 hours
 		HttpOnly: true,
-		Secure:   false, // Set to false since we're testing with HTTP
+		Secure:   true, // Important for production
 		SameSite: http.SameSiteLaxMode,
 	})
-	routes.SetupSessionStore(router, store)
+	router.Use(sessions.Sessions("mysession", store))
 
 	// Public routes
 	router.POST("/login", routes.Login)
