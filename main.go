@@ -65,6 +65,9 @@ func main() {
 	authorized := router.Group("/")
 	authorized.Use(routes.AuthMiddleware())
 	{
+		// User Management
+		authorized.POST("/update-password", routes.UpdatePassword)
+
 		// Stats
 		authorized.GET("/stats", routes.GetDashboardStats)
 
