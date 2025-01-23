@@ -48,8 +48,26 @@ func Login(c *gin.Context) {
 
 	session := sessions.Default(c)
 	fmt.Printf("Login - Before setting session for user: %s\n", user.Username)
+	fmt.Printf("Login - Request Host: %s\n", c.Request.Host)
 
 	session.Clear()
+
+	// Set session options based on the host
+	host := c.Request.Host
+	options := sessions.Options{
+		Path:     "/",
+		MaxAge:   3600 * 24,
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	if host == "87.106.203.188:8080" {
+		options.Domain = "87.106.203.188"
+		fmt.Printf("Login - Setting production domain: %s\n", options.Domain)
+	}
+
+	session.Options(options)
 	session.Set("user", user.Username)
 
 	if err := session.Save(); err != nil {

@@ -70,13 +70,27 @@ func main() {
 	// Add session middleware with appropriate settings
 	router.Use(func(c *gin.Context) {
 		session := sessions.Default(c)
-		session.Options(sessions.Options{
+
+		// Get the host from the request
+		host := c.Request.Host
+		fmt.Printf("Request Host: %s\n", host)
+
+		// Set session options based on the host
+		options := sessions.Options{
 			Path:     "/",
 			MaxAge:   3600 * 24,
 			HttpOnly: true,
 			Secure:   false,
 			SameSite: http.SameSiteLaxMode,
-		})
+		}
+
+		// Set domain for production
+		if host == "87.106.203.188:8080" {
+			options.Domain = "87.106.203.188"
+			fmt.Printf("Setting production domain: %s\n", options.Domain)
+		}
+
+		session.Options(options)
 		c.Next()
 	})
 
