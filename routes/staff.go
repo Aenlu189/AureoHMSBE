@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"net/http"
@@ -29,27 +29,10 @@ type CleaningRecord struct {
 	Status     string `gorm:"type:enum('IN_PROGRESS','COMPLETED');default:'IN_PROGRESS'"`
 }
 
-// StaffClaims extends the standard JWT claims with staff-specific fields
-type StaffClaims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
-	jwt.StandardClaims
-}
-
-func generateStaffToken(staff *Staff) (string, error) {
-	claims := StaffClaims{
-		UserID:   staff.ID,
-		Username: staff.Username,
-		Role:     staff.Role,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(24 * time.Hour).Unix(),
-			IssuedAt:  time.Now().Unix(),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtKey) // Using the same key from auth.go
+func generateStaffSession(staff *Staff, c *gin.Context) {
+	session := sessions.Default(c)
+	session.Set("user_id", staff.ID)
+	session.Save()
 }
 
 func StaffLogin(c *gin.Context) {
@@ -79,15 +62,9 @@ func StaffLogin(c *gin.Context) {
 		return
 	}
 
-	token, err := generateStaffToken(&staff)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to generate token"})
-		return
-	}
-
+	generateStaffSession(&staff, c)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
-		"token":   token,
 		"staff": gin.H{
 			"id":       staff.ID,
 			"name":     staff.Name,
@@ -98,9 +75,9 @@ func StaffLogin(c *gin.Context) {
 }
 
 func GetRoomsForCleaning(c *gin.Context) {
-	// Get staff ID from context (set by AuthMiddleware)
-	staffID, exists := c.Get("user_id")
-	if !exists {
+	session := sessions.Default(c)
+	userID := session.Get("user_id")
+	if userID == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -133,7 +110,7 @@ func GetRoomsForCleaning(c *gin.Context) {
 		if record, exists := cleaningMap[room.Room]; exists {
 			roomData["cleaning_status"] = record.Status
 			roomData["cleaning_start_time"] = record.StartTime
-			if record.StaffID == staffID.(uint) {
+			if record.StaffID == userID.(uint) {
 				roomData["assigned_to_me"] = true
 			}
 		}
@@ -147,9 +124,9 @@ func GetRoomsForCleaning(c *gin.Context) {
 }
 
 func StartCleaning(c *gin.Context) {
-	// Get staff ID from context (set by AuthMiddleware)
-	staffID, exists := c.Get("user_id")
-	if !exists {
+	session := sessions.Default(c)
+	userID := session.Get("user_id")
+	if userID == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -173,7 +150,7 @@ func StartCleaning(c *gin.Context) {
 
 	cleaningRecord := CleaningRecord{
 		RoomNumber: request.RoomNumber,
-		StaffID:    staffID.(uint),
+		StaffID:    userID.(uint),
 		StartTime:  time.Now(),
 		Status:     "IN_PROGRESS",
 	}
@@ -189,9 +166,9 @@ func StartCleaning(c *gin.Context) {
 }
 
 func CompleteCleaning(c *gin.Context) {
-	// Get staff ID from context (set by AuthMiddleware)
-	staffID, exists := c.Get("user_id")
-	if !exists {
+	session := sessions.Default(c)
+	userID := session.Get("user_id")
+	if userID == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -215,7 +192,7 @@ func CompleteCleaning(c *gin.Context) {
 
 	now := time.Now()
 	if err := tx.Model(&CleaningRecord{}).
-		Where("room_number = ? AND staff_id = ? AND status = ?", request.RoomNumber, staffID, "IN_PROGRESS").
+		Where("room_number = ? AND staff_id = ? AND status = ?", request.RoomNumber, userID, "IN_PROGRESS").
 		Updates(map[string]interface{}{
 			"end_time": now,
 			"status":   "COMPLETED",
@@ -230,15 +207,15 @@ func CompleteCleaning(c *gin.Context) {
 }
 
 func GetStaffCleaningHistory(c *gin.Context) {
-	// Get staff ID from context (set by AuthMiddleware)
-	staffID, exists := c.Get("user_id")
-	if !exists {
+	session := sessions.Default(c)
+	userID := session.Get("user_id")
+	if userID == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
 
 	var records []CleaningRecord
-	if err := DB.Where("staff_id = ?", staffID).
+	if err := DB.Where("staff_id = ?", userID).
 		Order("created_at DESC").
 		Limit(50).
 		Find(&records).Error; err != nil {

@@ -37,24 +37,16 @@ func main() {
 
 	router := gin.Default()
 
-	// CORS configuration
-	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{
-		"http://localhost:63343",
-		"http://127.0.0.1:63343",
-		"http://87.106.203.188",
-		"http://aureocloud.co.uk",
-		"http://www.aureocloud.co.uk",
-	}
-	config.AllowCredentials = true
-	config.AllowHeaders = []string{
-		"Origin",
-		"Content-Length",
-		"Content-Type",
-		"Authorization",
-	}
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	router.Use(cors.New(config))
+	// Setup CORS
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:63343", "http://127.0.0.1:63343", "http://87.106.203.188", "http://aureocloud.co.uk", "http://www.aureocloud.co.uk"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		AllowCredentials: true,
+	}))
+
+	// Setup session store
+	routes.SetupSessionStore(router)
 
 	// Public routes
 	router.POST("/login", routes.Login)
