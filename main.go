@@ -4,7 +4,6 @@ import (
 	"AureoHMSBE/routes"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
