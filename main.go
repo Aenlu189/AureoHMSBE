@@ -42,9 +42,9 @@ func main() {
 
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{
-		"http://localhost:63343", // Local development
-		"http://127.0.0.1:63343", // For local development
-		"http://87.106.203.188",  // VPS IP
+		"http://localhost:63343",
+		"http://127.0.0.1:63343",
+		"http://87.106.203.188",
 		"http://aureocloud.co.uk",
 		"http://www.aureocloud.co.uk",
 	}
@@ -56,6 +56,7 @@ func main() {
 		"Authorization",
 		"Accept",
 		"Cookie",
+		"Set-Cookie",
 	}
 	config.ExposeHeaders = []string{"Set-Cookie"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
@@ -77,9 +78,9 @@ func main() {
 			Path:     "/",
 			MaxAge:   3600 * 24,
 			HttpOnly: true,
-			Secure:   false,                // Set to false since we're not using HTTPS yet
-			Domain:   "",                   // Empty for now to work with IP
-			SameSite: http.SameSiteLaxMode, // Less restrictive for cross-domain
+			Secure:   false, // Set to false since we're not using HTTPS
+			Domain:   "",    // Empty to allow the browser to handle it
+			SameSite: http.SameSiteLaxMode,
 		}
 
 		session.Options(options)

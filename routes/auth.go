@@ -50,40 +50,29 @@ func Login(c *gin.Context) {
 	fmt.Printf("Login - Before setting session for user: %s\n", user.Username)
 	fmt.Printf("Login - Request Origin: %s\n", c.GetHeader("Origin"))
 
+	// Clear any existing session
 	session.Clear()
 
-	// Set session options based on the host
-	host := c.Request.Host
-	options := sessions.Options{
-		Path:     "/",
-		MaxAge:   3600 * 24,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteNoneMode,
-	}
-
-	if host == "87.106.203.188:8080" {
-		options.Domain = "87.106.203.188"
-		fmt.Printf("Login - Setting production domain: %s\n", options.Domain)
-	}
-
-	session.Options(options)
+	// Set session data
 	session.Set("user", user.Username)
+	session.Set("userID", user.ID)
 
+	// Save immediately
 	if err := session.Save(); err != nil {
-		fmt.Printf("Failed to save session: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to save session"})
+		fmt.Printf("Error saving session: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error creating session"})
 		return
 	}
 
-	// Verify session was saved
-	savedUser := session.Get("user")
-	fmt.Printf("Login - After saving session. Saved user: %v\n", savedUser)
-	fmt.Printf("Login - Response Headers: %v\n", c.Writer.Header())
+	fmt.Printf("Login - After setting session. Session data: %v\n", session.Get("user"))
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Login successful!",
-		"username": user.Username,
+		"message": "Login successful",
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"name":     user.Name,
+		},
 	})
 }
 
