@@ -30,21 +30,28 @@ type Receptionist struct {
 func Login(c *gin.Context) {
 	var loginData LoginRequest
 	if err := c.ShouldBindJSON(&loginData); err != nil {
+		log.Printf("Login error: Invalid request format - %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
 
+	log.Printf("Login attempt for username: %s", loginData.Username)
+
 	var user Receptionist
 	result := DB.Where("username = ?", loginData.Username).First(&user)
 	if result.Error != nil {
+		log.Printf("Login error: Invalid credentials - user not found")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
 	if user.Password != loginData.Password {
+		log.Printf("Login error: Invalid credentials - wrong password")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
+
+	log.Printf("Login successful for user: %s", user.Username)
 
 	// Set session cookie
 	c.SetCookie(
@@ -56,6 +63,8 @@ func Login(c *gin.Context) {
 		false, // set to true in production with HTTPS
 		true,  // HttpOnly
 	)
+
+	log.Printf("Set cookie for user: %s", user.Username)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
