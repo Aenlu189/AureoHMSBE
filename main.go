@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
@@ -48,18 +49,33 @@ func main() {
 		"http://87.106.203.188:3000",
 	}
 	config.AllowCredentials = true
-	config.AllowHeaders = []string{"Origin", "Content-length", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{"Origin", "Content-length", "Content-Type", "Authorization", "Accept"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	router.Use(cors.New(config))
 
 	store := cookie.NewStore([]byte("secret"))
-	store.Options(sessions.Options{
-		Path:     "/",
-		MaxAge:   3600 * 24,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteStrictMode,
-	})
+	isProduction := os.Getenv("GIN_MODE") == "release"
+	var sessionOptions sessions.Options
+	if isProduction {
+		sessionOptions = sessions.Options{
+			Path:     "/",
+			MaxAge:   3600 * 24,
+			HttpOnly: true,
+			Secure:   true,
+			Domain:   "87.106.203.188",
+			SameSite: http.SameSiteNoneMode,
+		}
+	} else {
+		sessionOptions = sessions.Options{
+			Path:     "/",
+			MaxAge:   3600 * 24,
+			HttpOnly: true,
+			Secure:   false,
+			SameSite: http.SameSiteStrictMode,
+		}
+	}
+
+	store.Options(sessionOptions)
 	router.Use(sessions.Sessions("mysession", store))
 
 	// Authentication
