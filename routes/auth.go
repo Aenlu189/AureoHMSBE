@@ -50,9 +50,6 @@ func Login(c *gin.Context) {
 	fmt.Printf("Login - Before setting session for user: %s\n", user.Username)
 	fmt.Printf("Login - Request Origin: %s\n", c.GetHeader("Origin"))
 
-	// Clear any existing session
-	session.Clear()
-
 	// Set session data
 	session.Set("user", user.Username)
 	session.Set("userID", user.ID)
