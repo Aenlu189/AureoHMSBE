@@ -55,7 +55,7 @@ func main() {
 	store := cookie.NewStore([]byte("your-secret-key"))
 	store.Options(sessions.Options{
 		Path:     "/",
-		MaxAge:   86400,
+		MaxAge:   86400, // 24 hours in seconds
 		HttpOnly: true,
 		Secure:   false,
 		Domain:   "aureocloud.co.uk",

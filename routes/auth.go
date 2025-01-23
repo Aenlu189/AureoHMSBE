@@ -1,11 +1,9 @@
 package routes
 
 import (
-	"errors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"log"
 	"net/http"
 )
 
@@ -29,52 +27,52 @@ type Receptionist struct {
 }
 
 func Login(c *gin.Context) {
-	var requestData LoginRequest
-	if err := c.ShouldBindJSON(&requestData); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request data"})
+	var loginData struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+
+	if err := c.ShouldBindJSON(&loginData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
 
 	var user Receptionist
-	result := DB.Where("username = ?", requestData.Username).First(&user)
+	result := DB.Where("username = ?", loginData.Username).First(&user)
 	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	if user.Password != requestData.Password {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
+	if user.Password != loginData.Password {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Set session
+	// Create session
 	session := sessions.Default(c)
-	session.Clear()
 	session.Set("user_id", user.ID)
 	session.Set("username", user.Username)
 	session.Set("authenticated", true)
-
-	log.Printf("Setting session for user: %v", user.Username)
+	session.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   86400, // 24 hours in seconds
+		HttpOnly: true,
+		Secure:   false,
+		Domain:   "aureocloud.co.uk",
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	if err := session.Save(); err != nil {
-		log.Printf("Error saving session: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error saving session"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
-
-	log.Printf("Session saved successfully")
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
 		"user": gin.H{
-			"id":       user.ID,
 			"username": user.Username,
 			"name":     user.Name,
-			"email":    user.Email,
 		},
 	})
 }
@@ -82,7 +80,20 @@ func Login(c *gin.Context) {
 func Logout(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Clear()
-	session.Save()
+	session.Options(sessions.Options{
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   false,
+		Domain:   "aureocloud.co.uk",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	if err := session.Save(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to logout"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
