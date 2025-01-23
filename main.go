@@ -90,18 +90,7 @@ func main() {
 	// Authentication
 	router.POST("/login", routes.Login)
 	router.POST("/logout", routes.Logout)
-	router.GET("/check-session", func(c *gin.Context) {
-		session := sessions.Default(c)
-		user := session.Get("user")
-		fmt.Printf("Check Session - Current user: %v\n", user)
-		fmt.Printf("Request Headers: %v\n", c.Request.Header)
-
-		if user == nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Not logged in"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"message": "Logged in", "user": user})
-	})
+	router.GET("/check-session", routes.CheckSession)
 
 	// Reservation
 	router.POST("/create-reservation", routes.CreateReservation)

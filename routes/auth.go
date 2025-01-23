@@ -47,8 +47,13 @@ func Login(c *gin.Context) {
 	}
 
 	session := sessions.Default(c)
+	// Clear any existing session
+	session.Clear()
+	if err := session.Save(); err != nil {
+		fmt.Printf("Error clearing session: %v\n", err)
+	}
+
 	fmt.Printf("Login - Before setting session for user: %s\n", user.Username)
-	fmt.Printf("Login - Request Origin: %s\n", c.GetHeader("Origin"))
 
 	// Set session data
 	session.Set("user", user.Username)
@@ -87,6 +92,36 @@ func Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 	fmt.Println("Logged out successfully")
 	fmt.Println("Session user: ", user)
+}
+
+func CheckSession(c *gin.Context) {
+	session := sessions.Default(c)
+	username := session.Get("user")
+	userID := session.Get("userID")
+
+	fmt.Printf("CheckSession - Session data: user=%v, userID=%v\n", username, userID)
+
+	if username == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Not logged in"})
+		return
+	}
+
+	// Get user details from database
+	var user Receptionist
+	result := DB.Where("username = ?", username).First(&user)
+	if result.Error != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Authenticated",
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"name":     user.Name,
+		},
+	})
 }
 
 func AuthMiddleware() gin.HandlerFunc {
