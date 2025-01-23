@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"log"
 	"net/http"
 )
 
@@ -81,21 +82,33 @@ func Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
-// CheckAuth middleware to verify authentication
-func CheckAuth(c *gin.Context) {
+// verifySession is a helper function that verifies the session cookie
+func verifySession(c *gin.Context) (*Receptionist, error) {
 	sessionCookie, err := c.Cookie("session")
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
-		c.Abort()
-		return
+		log.Printf("Cookie error: %v", err)
+		return nil, err
 	}
 
-	// Verify the user exists
+	log.Printf("Found session cookie: %s", sessionCookie)
+
 	var user Receptionist
 	result := DB.Where("username = ?", sessionCookie).First(&user)
 	if result.Error != nil {
+		log.Printf("Database error: %v", result.Error)
 		c.SetCookie("session", "", -1, "/", "", false, true)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
+		return nil, result.Error
+	}
+
+	log.Printf("Found user: %s", user.Username)
+	return &user, nil
+}
+
+// CheckAuth middleware to verify authentication
+func CheckAuth(c *gin.Context) {
+	user, err := verifySession(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
 		c.Abort()
 		return
 	}
@@ -115,19 +128,9 @@ func CheckAuth(c *gin.Context) {
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		sessionCookie, err := c.Cookie("session")
+		user, err := verifySession(c)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Not authenticated"})
-			c.Abort()
-			return
-		}
-
-		// Verify the user exists
-		var user Receptionist
-		result := DB.Where("username = ?", sessionCookie).First(&user)
-		if result.Error != nil {
-			c.SetCookie("session", "", -1, "/", "", false, true)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
 			c.Abort()
 			return
 		}
