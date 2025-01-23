@@ -5,6 +5,7 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"log"
 	"net/http"
 )
 
@@ -50,10 +51,19 @@ func Login(c *gin.Context) {
 	session.Clear() // Clear any existing session first
 	session.Set("user_id", user.ID)
 	session.Set("authenticated", true)
+
+	// Debug logging
+	log.Printf("Setting session for user ID: %v", user.ID)
+	log.Printf("Request headers: %v", c.Request.Header)
+
 	if err := session.Save(); err != nil {
+		log.Printf("Error saving session: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error saving session"})
 		return
 	}
+
+	log.Printf("Session saved successfully")
+	log.Printf("Response headers: %v", c.Writer.Header())
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
