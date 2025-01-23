@@ -47,8 +47,13 @@ func Login(c *gin.Context) {
 
 	// Set simple session
 	session := sessions.Default(c)
+	session.Clear() // Clear any existing session first
 	session.Set("user_id", user.ID)
-	session.Save()
+	session.Set("authenticated", true)
+	if err := session.Save(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error saving session"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
@@ -70,7 +75,9 @@ func Logout(c *gin.Context) {
 func CheckAuth(c *gin.Context) {
 	session := sessions.Default(c)
 	userID := session.Get("user_id")
-	if userID == nil {
+	authenticated := session.Get("authenticated")
+
+	if userID == nil || authenticated == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Not authenticated"})
 		return
 	}
@@ -78,6 +85,8 @@ func CheckAuth(c *gin.Context) {
 	var user Receptionist
 	result := DB.First(&user, userID)
 	if result.Error != nil {
+		session.Clear()
+		session.Save()
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "User not found"})
 		return
 	}
@@ -96,7 +105,8 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		session := sessions.Default(c)
 		userID := session.Get("user_id")
-		if userID == nil {
+		authenticated := session.Get("authenticated")
+		if userID == nil || authenticated == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Not authenticated"})
 			c.Abort()
 			return

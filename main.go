@@ -4,6 +4,7 @@ import (
 	"AureoHMSBE/routes"
 	"fmt"
 	"log"
+	"net/http"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
@@ -41,9 +42,10 @@ func main() {
 
 	// Setup CORS
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://aureocloud.co.uk"},
+		AllowOrigins:     []string{"http://aureocloud.co.uk", "https://aureocloud.co.uk"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Set-Cookie"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
@@ -55,6 +57,8 @@ func main() {
 		Domain:   "aureocloud.co.uk",
 		MaxAge:   86400, // 24 hours
 		HttpOnly: true,
+		Secure:   false, // Set to false since we're testing with HTTP
+		SameSite: http.SameSiteLaxMode,
 	})
 	routes.SetupSessionStore(router, store)
 
