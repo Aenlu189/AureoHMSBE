@@ -2,7 +2,6 @@ package main
 
 import (
 	"AureoHMSBE/routes"
-	"errors"
 	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
@@ -43,7 +42,7 @@ func main() {
 
 	// Add CORS middleware before any routes
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://aureocloud.co.uk"},
+		AllowOrigins:     []string{"http://87.106.203.188:8080", "http://aureocloud.co.uk", "http://aureocloud.co.uk:8080"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length", "Set-Cookie"},
@@ -147,33 +146,4 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
-}
-
-func setCookieHandler(w http.ResponseWriter, r *http.Request) {
-	cookie := http.Cookie{
-		Name:     "session",
-		Value:    "Hello world",
-		Path:     "/",
-		MaxAge:   3600,
-		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteNoneMode,
-	}
-	http.SetCookie(w, &cookie)
-	w.Write([]byte("cookie set!"))
-}
-
-func getCookieHandler(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("session")
-	if err != nil {
-		switch {
-		case errors.Is(err, http.ErrNoCookie):
-			http.Error(w, "cookie not found", http.StatusBadRequest)
-		default:
-			log.Println(err)
-			http.Error(w, "server error", http.StatusInternalServerError)
-		}
-		return
-	}
-	w.Write([]byte(cookie.Value))
 }

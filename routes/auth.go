@@ -18,11 +18,11 @@ type LoginRequest struct {
 }
 
 type Receptionist struct {
-	ID       uint   `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
+	ID       int    `gorm:"primaryKey"`
+	Name     string `gorm:"not null"`
+	Email    string `gorm:"not null"`
+	Username string `gorm:"unique: not null"`
+	Password string `gorm:"not null"`
 }
 
 // Login handles user authentication
@@ -51,7 +51,7 @@ func Login(c *gin.Context) {
 		user.Username,
 		86400, // 24 hours
 		"/",
-		"aureocloud.co.uk",
+		"",    // empty domain to work with both IP and domain name
 		false, // set to true in production with HTTPS
 		true,  // HttpOnly
 	)
@@ -73,9 +73,9 @@ func Logout(c *gin.Context) {
 		"",
 		-1,
 		"/",
-		"aureocloud.co.uk",
-		false,
-		true,
+		"",    // empty domain to work with both IP and domain name
+		false, // set to true in production with HTTPS
+		true,  // HttpOnly
 	)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
@@ -94,7 +94,7 @@ func CheckAuth(c *gin.Context) {
 	var user Receptionist
 	result := DB.Where("username = ?", sessionCookie).First(&user)
 	if result.Error != nil {
-		c.SetCookie("session", "", -1, "/", "aureocloud.co.uk", false, true)
+		c.SetCookie("session", "", -1, "/", "", false, true)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
 		c.Abort()
 		return
@@ -126,7 +126,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		var user Receptionist
 		result := DB.Where("username = ?", sessionCookie).First(&user)
 		if result.Error != nil {
-			c.SetCookie("session", "", -1, "/", "aureocloud.co.uk", false, true)
+			c.SetCookie("session", "", -1, "/", "", false, true)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
 			c.Abort()
 			return
