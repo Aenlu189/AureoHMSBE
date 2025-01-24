@@ -3,19 +3,19 @@ package main
 import (
 	"AureoHMSBE/routes"
 	"fmt"
+	"log"
+	"net/http"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"log"
-	"net/http"
-	"os"
 )
 
 func main() {
-	dsn := "Aenlu:Hninhninlatt21!@tcp(87.106.203.188:3306)/Aureo_Cloud?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := "root:Hninhninlatt21@tcp(127.0.0.1:3306)/Aureo_Cloud?charset=utf8mb4&parseTime=True&loc=Local"
 	var err error
 	routes.DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
@@ -40,110 +40,91 @@ func main() {
 
 	router := gin.Default()
 
-	// Add CORS middleware before any routes
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"}, // Allow all origins during development
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "Cookie"},
-		ExposeHeaders:    []string{"Content-Length", "Set-Cookie"},
-		AllowCredentials: true,
-		MaxAge:           86400, // 24 hours
-	}))
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://aureocloud.co.uk"}
+	config.AllowCredentials = true
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.ExposeHeaders = []string{"Set-Cookie"}
+	router.Use(cors.New(config))
 
-	// Setup session store with minimal options
-	store := cookie.NewStore([]byte("your-secret-key"))
+	store := cookie.NewStore([]byte("secret"))
 	store.Options(sessions.Options{
 		Path:     "/",
-		MaxAge:   86400, // 24 hours in seconds
-		HttpOnly: true,
+		MaxAge:   3600 * 24,
+		HttpOnly: false,
 		Secure:   false,
 		Domain:   "aureocloud.co.uk",
 		SameSite: http.SameSiteLaxMode,
 	})
-
-	// Use session middleware
 	router.Use(sessions.Sessions("mysession", store))
 
-	// Add logging middleware
-	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
-		Output: os.Stdout,
-		Formatter: func(param gin.LogFormatterParams) string {
-			return fmt.Sprintf("[GIN] %v | %3d | %13v | %15s | %-7s %s\n",
-				param.TimeStamp.Format("2006/01/02 - 15:04:05"),
-				param.StatusCode,
-				param.Latency,
-				param.ClientIP,
-				param.Method,
-				param.Path,
-			)
-		},
-	}))
-
-	// Public routes
+	// Authentication
 	router.POST("/login", routes.Login)
 	router.POST("/logout", routes.Logout)
-	router.GET("/check-session", routes.CheckAuth)
+	router.POST("/forgot-password", routes.ForgotPassword)
+	router.POST("/admin", routes.AdminLogin)
+	router.GET("/check-session", checkSession)
 
-	// Protected routes
-	authorized := router.Group("/")
-	authorized.Use(routes.AuthMiddleware())
-	{
-		// User Management
-		authorized.POST("/update-password", routes.UpdatePassword)
+	// Reservation
+	router.POST("/create-reservation", routes.CreateReservation)
+	router.GET("reservations/date/:date", routes.GetReservationsByDate)
+	router.GET("reservations/:id", routes.GetReservation)
+	router.DELETE("reservations/:id", routes.DeleteReservation)
+	router.PUT("reservations/:id", routes.UpdateReservation)
 
-		// Stats
-		authorized.GET("/stats", routes.GetDashboardStats)
+	//Rooms
+	router.GET("/rooms", routes.GetRooms)
+	router.GET("/rooms/:room", routes.GetRoom)
+	router.PUT("rooms/:room", routes.UpdateRoomStatus)
 
-		// Reservations
-		authorized.POST("/create-reservation", routes.CreateReservation)
-		authorized.GET("/reservations/date/:date", routes.GetReservationsByDate)
-		authorized.GET("/reservations/:id", routes.GetReservation)
-		authorized.PUT("/reservations/:id", routes.UpdateReservation)
-		authorized.DELETE("/reservations/:id", routes.DeleteReservation)
+	//Guests
+	router.POST("/create-guest", routes.CreateGuest)
+	router.GET("/guests/current/:roomNumber", routes.GetCurrentGuest)
+	router.GET("/guests/checkouts/today", routes.GetTodayCheckouts)
+	router.PUT("/guests/:id", routes.UpdateGuestInfo)
+	router.PUT("/guests/foodPrice/:id", routes.UpdateGuestFoodPrice)
 
-		// Rooms
-		authorized.GET("/rooms", routes.GetRooms)
-		authorized.GET("/rooms/:room", routes.GetRoom)
-		authorized.PUT("/rooms/:room", routes.UpdateRoomStatus)
+	// Food
+	router.POST("/food/order", routes.CreateFoodOrder)
+	router.GET("/food/order/:id", routes.GetFoodOrder)
+	router.GET("/food/orders/:roomId", routes.GetFoodOrdersByRoom)
+	router.GET("/food/orders/guest/:guestId", routes.GetFoodOrdersByGuestID)
+	router.PUT("/order/:id", routes.UpdateFoodOrder)
+	router.DELETE("/order/:id", routes.DeleteFoodOrder)
 
-		// Guests
-		authorized.POST("/create-guest", routes.CreateGuest)
-		authorized.GET("/guests/current/:roomNumber", routes.GetCurrentGuest)
-		authorized.GET("/guests/checkouts/today", routes.GetTodayCheckouts)
-		authorized.PUT("/guests/:id", routes.UpdateGuestInfo)
-		authorized.PUT("/guests/foodPrice/:id", routes.UpdateGuestFoodPrice)
+	router.POST("/food/menu", routes.CreateMenu)
+	router.GET("food/menus", routes.GetMenu)
+	router.GET("food/menu/:id", routes.GetMenuByID)
+	router.GET("food/menus/:foodName", routes.GetMenuByName)
+	router.PUT("/menu/:id", routes.UpdateMenu)
+	router.DELETE("/menu/:id", routes.DeleteMenu)
 
-		// Food Orders
-		authorized.POST("/food/order", routes.CreateFoodOrder)
-		authorized.GET("/food/order/:id", routes.GetFoodOrder)
-		authorized.GET("/food/orders/:roomId", routes.GetFoodOrdersByRoom)
-		authorized.GET("/food/orders/guest/:guestId", routes.GetFoodOrdersByGuestID)
-		authorized.PUT("/order/:id", routes.UpdateFoodOrder)
-		authorized.DELETE("/order/:id", routes.DeleteFoodOrder)
+	// Income Record
+	router.POST("/income", routes.AddIncome)
+	router.GET("income/today", routes.GetTodayIncome)
+	router.GET("income/date/:date", routes.GetIncomeByDate)
 
-		// Menu
-		authorized.POST("/food/menu", routes.CreateMenu)
-		authorized.GET("/food/menus", routes.GetMenu)
-		authorized.GET("/food/menu/:id", routes.GetMenuByID)
-		authorized.GET("/food/menus/:foodName", routes.GetMenuByName)
-		authorized.PUT("/menu/:id", routes.UpdateMenu)
-		authorized.DELETE("/menu/:id", routes.DeleteMenu)
+	protected := router.Group("/")
+	protected.Use(routes.AuthMiddleware())
 
-		// Income
-		authorized.POST("/income", routes.AddIncome)
-		authorized.GET("/income/today", routes.GetTodayIncome)
-		authorized.GET("/income/date/:date", routes.GetIncomeByDate)
+	protected.GET("/stats", routes.GetDashboardStats)
 
-		// Staff
-		authorized.POST("/staff/login", routes.StaffLogin)
-		authorized.GET("/staff/rooms", routes.GetRoomsForCleaning)
-		authorized.POST("/staff/cleaning/start", routes.StartCleaning)
-		authorized.POST("/staff/cleaning/complete", routes.CompleteCleaning)
-		authorized.GET("/staff/history", routes.GetStaffCleaningHistory)
+	runErr := router.Run(":8080")
+	if runErr != nil {
+		fmt.Printf("Localhost server not running")
+		return
 	}
+}
 
-	err = router.Run(":8080")
-	if err != nil {
-		log.Fatal("Failed to start server:", err)
+func checkSession(c *gin.Context) {
+	session := sessions.Default(c)
+	user := session.Get("user")
+	fmt.Println("Session user: ", user)
+
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Not logged in"})
+	} else {
+		c.JSON(http.StatusOK, gin.H{"message": user})
 	}
 }
