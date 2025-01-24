@@ -7,8 +7,6 @@ import (
 	"net/http"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -45,26 +43,14 @@ func main() {
 	config.AllowCredentials = true
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.ExposeHeaders = []string{"Set-Cookie"}
 	router.Use(cors.New(config))
-
-	store := cookie.NewStore([]byte("secret"))
-	store.Options(sessions.Options{
-		Path:     "/",
-		MaxAge:   3600 * 24,
-		HttpOnly: false,
-		Secure:   false,
-		Domain:   "aureocloud.co.uk",
-		SameSite: http.SameSiteLaxMode,
-	})
-	router.Use(sessions.Sessions("mysession", store))
 
 	// Authentication
 	router.POST("/login", routes.Login)
 	router.POST("/logout", routes.Logout)
 	router.POST("/forgot-password", routes.ForgotPassword)
 	router.POST("/admin", routes.AdminLogin)
-	router.GET("/check-session", checkSession)
+	router.GET("/check-auth", checkAuth)
 
 	// Reservation
 	router.POST("/create-reservation", routes.CreateReservation)
@@ -105,26 +91,26 @@ func main() {
 	router.GET("income/today", routes.GetTodayIncome)
 	router.GET("income/date/:date", routes.GetIncomeByDate)
 
+	// Protected routes group
 	protected := router.Group("/")
 	protected.Use(routes.AuthMiddleware())
 
+	// Add your protected routes here
 	protected.GET("/stats", routes.GetDashboardStats)
 
-	runErr := router.Run(":8080")
-	if runErr != nil {
-		fmt.Printf("Localhost server not running")
-		return
+	fmt.Println("Server is running on :8080")
+	if err := router.Run(":8080"); err != nil {
+		log.Fatal("Failed to start server:", err)
 	}
 }
 
-func checkSession(c *gin.Context) {
-	session := sessions.Default(c)
-	user := session.Get("user")
-	fmt.Println("Session user: ", user)
-
-	if user == nil {
+func checkAuth(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Not logged in"})
-	} else {
-		c.JSON(http.StatusOK, gin.H{"message": user})
+		return
 	}
+
+	// The AuthMiddleware will handle token validation
+	routes.AuthMiddleware()(c)
 }
