@@ -116,9 +116,3 @@ func UpdateRoomStatus(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, existingRoom)
 }
-
-func GetDailyFoodRevenue() float64 {
-	// This function is not implemented in the provided code
-	// You need to implement this function to return the daily food revenue
-	return 0
-}
