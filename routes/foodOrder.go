@@ -312,3 +312,36 @@ func GetDailyFoodRevenue() float64 {
 	}
 	return dailyRevenue.Revenue
 }
+
+func GetTodayFoodRevenue(c *gin.Context) {
+	today := time.Now().Format("2006-01-02")
+	var foodOrders []FoodOrder
+	if err := DB.Where("DATE(order_time) = ?", today).Find(&foodOrders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch food orders"})
+		return
+	}
+
+	var totalRevenue float64
+	for _, order := range foodOrders {
+		totalRevenue += order.Price * float64(order.Quantity)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"foodRevenue": totalRevenue})
+}
+
+func GetFoodRevenueByDate(c *gin.Context) {
+	date := c.Param("date")
+	var foodOrders []FoodOrder
+
+	if err := DB.Where("DATE(order_time) = ?", date).Find(&foodOrders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch food orders"})
+		return
+	}
+
+	var totalRevenue float64
+	for _, order := range foodOrders {
+		totalRevenue += order.Price * float64(order.Quantity)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"foodRevenue": totalRevenue})
+}

@@ -77,6 +77,8 @@ func main() {
 	router.GET("/food/order/:id", routes.GetFoodOrder)
 	router.GET("/food/orders/:roomId", routes.GetFoodOrdersByRoom)
 	router.GET("/food/orders/guest/:guestId", routes.GetFoodOrdersByGuestID)
+	router.GET("/food/revenue/today", routes.GetTodayFoodRevenue)
+	router.GET("/food/revenue/date/:date", routes.GetFoodRevenueByDate)
 	router.PUT("/order/:id", routes.UpdateFoodOrder)
 	router.DELETE("/order/:id", routes.DeleteFoodOrder)
 
