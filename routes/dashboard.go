@@ -15,13 +15,14 @@ type Rooms struct {
 }
 
 type roomData struct {
-	AvailableRooms int `json:"availableRooms"`
-	TotalRooms     int `json:"totalRooms"`
-	FullNight      int `json:"fullNight"`
-	DayCaution     int `json:"dayCaution"`
-	Session        int `json:"session"`
-	Housekeeping   int `json:"housekeeping"`
-	Maintenance    int `json:"maintenance"`
+	AvailableRooms int     `json:"availableRooms"`
+	TotalRooms     int     `json:"totalRooms"`
+	FullNight      int     `json:"fullNight"`
+	DayCaution     int     `json:"dayCaution"`
+	Session        int     `json:"session"`
+	Housekeeping   int     `json:"housekeeping"`
+	Maintenance    int     `json:"maintenance"`
+	FoodRevenue    float64 `json:"foodRevenue"`
 }
 
 func GetDashboardStats(c *gin.Context) {
@@ -51,6 +52,10 @@ func GetDashboardStats(c *gin.Context) {
 			stats.Maintenance++
 		}
 	}
+
+	// Get today's food revenue
+	stats.FoodRevenue = GetDailyFoodRevenue()
+
 	c.JSON(http.StatusOK, stats)
 }
 
@@ -110,4 +115,10 @@ func UpdateRoomStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, existingRoom)
+}
+
+func GetDailyFoodRevenue() float64 {
+	// This function is not implemented in the provided code
+	// You need to implement this function to return the daily food revenue
+	return 0
 }

@@ -26,6 +26,14 @@ type Menu struct {
 	FoodPrice string `gorm:"not null"`
 }
 
+type DailyFoodRevenue struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement"`
+	Date      time.Time `gorm:"type:date;uniqueIndex"`
+	Revenue   float64   `gorm:"not null;default:0"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
+	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+}
+
 func CreateMenu(c *gin.Context) {
 	var menu Menu
 
@@ -175,6 +183,21 @@ func CreateFoodOrder(c *gin.Context) {
 		return
 	}
 
+	// Update daily food revenue
+	today := time.Now().Truncate(24 * time.Hour)
+	var dailyRevenue DailyFoodRevenue
+	result := DB.Where("date = ?", today).FirstOrCreate(&dailyRevenue, DailyFoodRevenue{Date: today})
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update daily food revenue"})
+		return
+	}
+
+	dailyRevenue.Revenue += order.Price * float64(order.Quantity)
+	if err := DB.Save(&dailyRevenue).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update daily food revenue"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Food order created successfully",
 		"order":   order,
@@ -275,4 +298,17 @@ func DeleteFoodOrder(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Food order deleted successfully"})
+}
+
+func GetDailyFoodRevenue() float64 {
+	today := time.Now().Truncate(24 * time.Hour)
+	var dailyRevenue DailyFoodRevenue
+	result := DB.Where("date = ?", today).First(&dailyRevenue)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return 0
+		}
+		return 0
+	}
+	return dailyRevenue.Revenue
 }

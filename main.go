@@ -30,7 +30,8 @@ func main() {
 		&routes.Menu{},
 		&routes.Income{},
 		&routes.Staff{},
-		&routes.CleaningRecord{})
+		&routes.CleaningRecord{},
+		&routes.DailyFoodRevenue{})
 	if dbError != nil {
 		return
 	}
