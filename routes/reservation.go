@@ -35,7 +35,7 @@ func CreateReservation(c *gin.Context) {
 	}
 
 	if reservation.ReservationDate.IsZero() {
-		reservation.ReservationDate = time.Now()
+		reservation.ReservationDate = GetMyanmarTime()
 	}
 
 	if err := DB.Create(&reservation).Error; err != nil {
@@ -62,10 +62,18 @@ func GetReservationsByDate(c *gin.Context) {
 	}
 
 	var reservations []Reservation
-	if err := DB.Where("DATE(checkin_date) = DATE(?)", parsedDate).Find(&reservations).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+
+	// Use Myanmar time for date comparison
+	query := DB.Where("DATE(reservation_date) = ?", parsedDate)
+	if err := query.Find(&reservations).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "No reservations found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch reservations"})
 		return
 	}
+
 	c.JSON(http.StatusOK, reservations)
 }
 

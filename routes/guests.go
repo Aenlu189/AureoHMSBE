@@ -37,7 +37,7 @@ func CreateGuest(c *gin.Context) {
 	}
 
 	if guest.CheckinDate.IsZero() {
-		guest.CheckinDate = time.Now()
+		guest.CheckinDate = GetMyanmarTime()
 	}
 
 	if err := DB.Create(&guest).Error; err != nil {
