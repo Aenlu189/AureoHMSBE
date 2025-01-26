@@ -20,6 +20,21 @@ type FoodOrder struct {
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
 }
 
+func (order *FoodOrder) BeforeCreate(tx *gorm.DB) error {
+	now := GetMyanmarTime()
+	order.CreatedAt = now
+	order.UpdatedAt = now
+	if order.OrderTime.IsZero() {
+		order.OrderTime = now
+	}
+	return nil
+}
+
+func (order *FoodOrder) BeforeUpdate(tx *gorm.DB) error {
+	order.UpdatedAt = GetMyanmarTime()
+	return nil
+}
+
 type Menu struct {
 	ID        uint   `gorm:"primaryKey;autoIncrement"`
 	FoodName  string `gorm:"not null"`
@@ -162,10 +177,6 @@ func CreateFoodOrder(c *gin.Context) {
 		return
 	}
 
-	if order.OrderTime.IsZero() {
-		order.OrderTime = time.Now()
-	}
-
 	if err := DB.Create(&order).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create food order: " + err.Error()})
 		return
@@ -180,21 +191,6 @@ func CreateFoodOrder(c *gin.Context) {
 	guest.FoodCharges += int(order.Price)
 	if err := DB.Save(&guest).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update guest food charges"})
-		return
-	}
-
-	// Update daily food revenue
-	today := time.Now().Truncate(24 * time.Hour)
-	var dailyRevenue DailyFoodRevenue
-	result := DB.Where("date = ?", today).FirstOrCreate(&dailyRevenue, DailyFoodRevenue{Date: today})
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update daily food revenue"})
-		return
-	}
-
-	dailyRevenue.Revenue += order.Price * float64(order.Quantity)
-	if err := DB.Save(&dailyRevenue).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update daily food revenue"})
 		return
 	}
 
@@ -300,21 +296,31 @@ func DeleteFoodOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Food order deleted successfully"})
 }
 
+func GetMyanmarTime() time.Time {
+	// Myanmar is UTC+6:30
+	return time.Now().UTC().Add(6*time.Hour + 30*time.Minute)
+}
+
 func GetDailyFoodRevenue() float64 {
-	today := time.Now().Truncate(24 * time.Hour)
-	var dailyRevenue DailyFoodRevenue
-	result := DB.Where("date = ?", today).First(&dailyRevenue)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return 0
-		}
+	myanmarTime := GetMyanmarTime()
+	today := time.Date(myanmarTime.Year(), myanmarTime.Month(), myanmarTime.Day(), 0, 0, 0, 0, time.UTC)
+
+	var foodOrders []FoodOrder
+	if err := DB.Where("DATE(order_time) = ?", today.Format("2006-01-02")).Find(&foodOrders).Error; err != nil {
 		return 0
 	}
-	return dailyRevenue.Revenue
+
+	var totalRevenue float64
+	for _, order := range foodOrders {
+		totalRevenue += order.Price * float64(order.Quantity)
+	}
+	return totalRevenue
 }
 
 func GetTodayFoodRevenue(c *gin.Context) {
-	today := time.Now().Format("2006-01-02")
+	myanmarTime := GetMyanmarTime()
+	today := myanmarTime.Format("2006-01-02")
+
 	var foodOrders []FoodOrder
 	if err := DB.Where("DATE(order_time) = ?", today).Find(&foodOrders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch food orders"})
