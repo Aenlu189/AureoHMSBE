@@ -145,7 +145,7 @@ func UpdateGuestFoodPrice(c *gin.Context) {
 
 func GetTodayCheckouts(c *gin.Context) {
 	var guests []Guests
-	today := GetMyanmarTime().Format("2006-01-02")
+	today := time.Now()
 
 	if err := DB.Where("DATE(checkout_date) = ? AND Status = ?", today, "ACTIVE").Find(&guests).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch checkouts"})
