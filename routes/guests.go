@@ -36,9 +36,8 @@ func CreateGuest(c *gin.Context) {
 		return
 	}
 
-	if guest.CheckinDate.IsZero() {
-		guest.CheckinDate = GetMyanmarTime()
-	}
+	// No need to set CheckinDate here since it's already set in frontend
+	// with exact Myanmar time down to seconds
 
 	if err := DB.Create(&guest).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create guest"})

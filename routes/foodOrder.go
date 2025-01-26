@@ -296,11 +296,6 @@ func DeleteFoodOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Food order deleted successfully"})
 }
 
-func GetMyanmarTime() time.Time {
-	// Myanmar is UTC+6:30
-	return time.Now().UTC().Add(6*time.Hour + 30*time.Minute)
-}
-
 func GetDailyFoodRevenue() float64 {
 	myanmarTime := GetMyanmarTime()
 	today := time.Date(myanmarTime.Year(), myanmarTime.Month(), myanmarTime.Day(), 0, 0, 0, 0, time.UTC)

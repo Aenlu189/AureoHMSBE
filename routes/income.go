@@ -16,6 +16,11 @@ type Income struct {
 	CreatedAt  time.Time `gorm:"not null"`
 }
 
+func GetMyanmarTime() time.Time {
+	loc, _ := time.LoadLocation("Asia/Yangon")
+	return time.Now().In(loc)
+}
+
 func AddIncome(c *gin.Context) {
 	var income Income
 	if err := c.BindJSON(&income); err != nil {
@@ -23,7 +28,7 @@ func AddIncome(c *gin.Context) {
 		return
 	}
 
-	income.CreatedAt = time.Now()
+	income.CreatedAt = GetMyanmarTime()
 	if err := DB.Create(&income).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create income record"})
 		return
@@ -37,7 +42,7 @@ func AddIncome(c *gin.Context) {
 
 func GetTodayIncome(c *gin.Context) {
 	var incomes []Income
-	today := time.Now().Format("2006-01-02")
+	today := GetMyanmarTime().Format("2006-01-02")
 
 	if err := DB.Preload("Guest").Where("DATE(created_at) = ?", today).Order("created_at DESC").Find(&incomes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch income"})
