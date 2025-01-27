@@ -37,7 +37,7 @@ func AddIncome(c *gin.Context) {
 
 func GetTodayIncome(c *gin.Context) {
 	var incomes []Income
-	today := time.Now().UTC().Format("2006-01-02")
+	today := time.Now()
 
 	if err := DB.Preload("Guest").Where("DATE(created_at) = ?", today).Order("created_at DESC").Find(&incomes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch income"})
