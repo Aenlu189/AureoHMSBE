@@ -145,11 +145,11 @@ func UpdateGuestFoodPrice(c *gin.Context) {
 
 func GetTodayCheckouts(c *gin.Context) {
 	var guests []Guests
-	myanmarTime := GetMyanmarTime()
+	now := time.Now().UTC()
 
-	// Create start and end of Myanmar day
-	startOfDay := time.Date(myanmarTime.Year(), myanmarTime.Month(), myanmarTime.Day(), 0, 0, 0, 0, myanmarTime.Location())
-	endOfDay := time.Date(myanmarTime.Year(), myanmarTime.Month(), myanmarTime.Day(), 23, 59, 59, 999999999, myanmarTime.Location())
+	// Create start and end of UTC day
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
 
 	if err := DB.Where("checkout_date BETWEEN ? AND ? AND Status = ?", startOfDay, endOfDay, "ACTIVE").Find(&guests).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch checkouts"})

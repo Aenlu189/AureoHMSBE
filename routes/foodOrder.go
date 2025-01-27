@@ -21,7 +21,7 @@ type FoodOrder struct {
 }
 
 func (order *FoodOrder) BeforeCreate(tx *gorm.DB) error {
-	now := GetMyanmarTime()
+	now := time.Now().UTC()
 	order.CreatedAt = now
 	order.UpdatedAt = now
 	if order.OrderTime.IsZero() {
@@ -31,7 +31,7 @@ func (order *FoodOrder) BeforeCreate(tx *gorm.DB) error {
 }
 
 func (order *FoodOrder) BeforeUpdate(tx *gorm.DB) error {
-	order.UpdatedAt = GetMyanmarTime()
+	order.UpdatedAt = time.Now().UTC()
 	return nil
 }
 
@@ -297,8 +297,8 @@ func DeleteFoodOrder(c *gin.Context) {
 }
 
 func GetDailyFoodRevenue() float64 {
-	myanmarTime := GetMyanmarTime()
-	today := time.Date(myanmarTime.Year(), myanmarTime.Month(), myanmarTime.Day(), 0, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
 	var foodOrders []FoodOrder
 	if err := DB.Where("DATE(order_time) = ?", today.Format("2006-01-02")).Find(&foodOrders).Error; err != nil {
@@ -313,18 +313,16 @@ func GetDailyFoodRevenue() float64 {
 }
 
 func GetTodayFoodRevenue(c *gin.Context) {
-	myanmarTime := GetMyanmarTime()
-	today := myanmarTime.Format("2006-01-02")
-
-	var foodOrders []FoodOrder
-	if err := DB.Where("DATE(order_time) = ?", today).Find(&foodOrders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch food orders"})
-		return
-	}
-
 	var totalRevenue float64
-	for _, order := range foodOrders {
-		totalRevenue += order.Price * float64(order.Quantity)
+	now := time.Now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	if err := DB.Model(&FoodOrder{}).
+		Where("DATE(order_time) = ?", today).
+		Select("COALESCE(SUM(price * quantity), 0)").
+		Scan(&totalRevenue).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to calculate today's food revenue"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"foodRevenue": totalRevenue})
@@ -332,16 +330,14 @@ func GetTodayFoodRevenue(c *gin.Context) {
 
 func GetFoodRevenueByDate(c *gin.Context) {
 	date := c.Param("date")
-	var foodOrders []FoodOrder
-
-	if err := DB.Where("DATE(order_time) = ?", date).Find(&foodOrders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch food orders"})
-		return
-	}
-
 	var totalRevenue float64
-	for _, order := range foodOrders {
-		totalRevenue += order.Price * float64(order.Quantity)
+
+	if err := DB.Model(&FoodOrder{}).
+		Where("DATE(order_time) = ?", date).
+		Select("COALESCE(SUM(price * quantity), 0)").
+		Scan(&totalRevenue).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to calculate food revenue for the date"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"foodRevenue": totalRevenue})

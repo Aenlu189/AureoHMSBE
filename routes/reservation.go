@@ -35,7 +35,7 @@ func CreateReservation(c *gin.Context) {
 	}
 
 	if reservation.ReservationDate.IsZero() {
-		reservation.ReservationDate = GetMyanmarTime()
+		reservation.ReservationDate = time.Now().UTC()
 	}
 
 	if err := DB.Create(&reservation).Error; err != nil {
@@ -63,7 +63,7 @@ func GetReservationsByDate(c *gin.Context) {
 
 	var reservations []Reservation
 
-	// Use Myanmar time for date comparison
+	// Use UTC time for date comparison
 	query := DB.Where("DATE(reservation_date) = ?", parsedDate)
 	if err := query.Find(&reservations).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
