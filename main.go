@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -41,7 +40,7 @@ func main() {
 	router := gin.Default()
 
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"https://aureocloud.co.uk", "https://127.0.0.1:5500"}
+	config.AllowOrigins = []string{"https://aureocloud.co.uk", "https://www.aureocloud.co.uk", "http://aureocloud.co.uk", "http://www.aureocloud.co.uk"}
 	config.AllowCredentials = true
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
@@ -102,19 +101,10 @@ func main() {
 	// Add your protected routes here
 	protected.GET("/stats", routes.GetDashboardStats)
 
-	certFile := "./ssl/server.crt"  // Development path
-	keyFile := "./ssl/server.key"   // Development path
-	
-	// Check if we're in production environment
-	if _, err := os.Stat("/etc/aureo/ssl/server.crt"); err == nil {
-		certFile = "/etc/aureo/ssl/server.crt"  // Production path
-		keyFile = "/etc/aureo/ssl/server.key"   // Production path
-	}
-
-	fmt.Println("Server starting on :8080 with HTTPS...")
-	err = router.RunTLS(":8080", certFile, keyFile)
-	if err != nil {
-		log.Fatalf("Failed to start HTTPS server: %v", err)
+	// Start the server
+	fmt.Println("Server starting on :8080...")
+	if err := router.Run(":8080"); err != nil {
+		log.Fatal("Failed to start server: ", err)
 	}
 }
 
