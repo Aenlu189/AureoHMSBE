@@ -40,7 +40,7 @@ func main() {
 	router := gin.Default()
 
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://aureocloud.co.uk", "http://127.0.0.1:5500"}
+	config.AllowOrigins = []string{"https://aureocloud.co.uk", "https://127.0.0.1:5500"}
 	config.AllowCredentials = true
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
@@ -101,9 +101,10 @@ func main() {
 	// Add your protected routes here
 	protected.GET("/stats", routes.GetDashboardStats)
 
-	fmt.Println("Server is running on :8080")
-	if err := router.Run(":8080"); err != nil {
-		log.Fatal("Failed to start server:", err)
+	fmt.Println("Server starting on :8080 with HTTPS...")
+	err = router.RunTLS(":8080", "./ssl/server.crt", "./ssl/server.key")
+	if err != nil {
+		log.Fatalf("Failed to start HTTPS server: %v", err)
 	}
 }
 
