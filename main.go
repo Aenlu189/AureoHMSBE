@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -39,14 +38,10 @@ func main() {
 
 	router := gin.Default()
 
-	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"https://aureocloud.co.uk"}
-	config.AllowCredentials = true
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "Accept"}
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"}
-	config.ExposeHeaders = []string{"Content-Length", "Authorization"}
-
-	router.Use(cors.New(config))
+	// Let Nginx handle CORS
+	router.Use(func(c *gin.Context) {
+		c.Next()
+	})
 
 	// Authentication
 	router.POST("/login", routes.Login)
