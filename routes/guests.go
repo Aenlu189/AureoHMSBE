@@ -125,6 +125,7 @@ func UpdateGuestFoodPrice(c *gin.Context) {
 
 	var requestBody struct {
 		FoodCharges float64 `json:"foodCharges"`
+		AmountPaid  float64 `json:"amountPaid"`
 	}
 
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
@@ -132,13 +133,19 @@ func UpdateGuestFoodPrice(c *gin.Context) {
 		return
 	}
 
-	if err := DB.Model(&guest).Update("food_charges", requestBody.FoodCharges).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update food price"})
+	// Update both food charges and amount paid
+	updates := map[string]interface{}{
+		"food_charges": requestBody.FoodCharges,
+		"amount_paid":  requestBody.AmountPaid,
+	}
+
+	if err := DB.Model(&guest).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update guest"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Food price updated successfully",
+		"message": "Guest updated successfully",
 		"guest":   guest,
 	})
 }
