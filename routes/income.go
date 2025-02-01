@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
@@ -8,7 +9,7 @@ import (
 
 type Income struct {
 	ID         uint      `gorm:"primaryKey;autoIncrement"`
-	Type       string    `gorm:"type:varchar(50);not null"` // Changed from enum to varchar to support custom types
+	Type       string    `gorm:"type:varchar(50);not null"`
 	GuestID    uint      `gorm:"not null"`
 	Guest      Guests    `gorm:"foreignKey:GuestID"`
 	RoomNumber int       `gorm:"not null"`
@@ -19,19 +20,12 @@ type Income struct {
 func AddIncome(c *gin.Context) {
 	var income Income
 	if err := c.BindJSON(&income); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+		fmt.Printf("Error binding JSON: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("Invalid request body: %v", err)})
 		return
 	}
 
-	// Validate Type field
-	validTypes := map[string]bool{
-		"CHECKED-IN":        true,
-		"EXTEND-STAY":       true,
-		"FOOD":              true,
-		"EMPLOYEE_EATERIES": true,
-		"GUEST_FOOD":        true,
-		"ELECTRICITY":       true,
-	}
+	fmt.Printf("Received income request: %+v\n", income)
 
 	// If type is not in validTypes and not empty, it's considered a custom type
 	if income.Type == "" {
@@ -39,15 +33,13 @@ func AddIncome(c *gin.Context) {
 		return
 	}
 
-	// Check if it's a valid type
-	if _, exists := validTypes[income.Type]; !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid payment type"})
-		return
-	}
-
 	income.CreatedAt = time.Now().UTC()
-	if err := DB.Create(&income).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create income record"})
+
+	// Create a new record in the database
+	result := DB.Create(&income)
+	if result.Error != nil {
+		fmt.Printf("Error creating income record: %v\n", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("Failed to create income record: %v", result.Error)})
 		return
 	}
 
@@ -62,7 +54,8 @@ func GetTodayIncome(c *gin.Context) {
 	today := time.Now().UTC().Format("2006-01-02") // Format as YYYY-MM-DD
 
 	if err := DB.Preload("Guest").Where("DATE(created_at) = ?", today).Order("created_at DESC").Find(&incomes).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch income"})
+		fmt.Printf("Error fetching today's income: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("Failed to fetch income: %v", err)})
 		return
 	}
 	c.JSON(http.StatusOK, incomes)
@@ -73,7 +66,8 @@ func GetIncomeByDate(c *gin.Context) {
 	var Incomes []Income
 
 	if err := DB.Preload("Guest").Where("DATE(created_at) = ?", date).Order("created_at DESC").Find(&Incomes).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch income"})
+		fmt.Printf("Error fetching income by date: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("Failed to fetch income: %v", err)})
 		return
 	}
 	c.JSON(http.StatusOK, Incomes)

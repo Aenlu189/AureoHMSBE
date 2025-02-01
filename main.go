@@ -1,6 +1,7 @@
 package main
 
 import (
+	"AureoHMSBE/migrations"
 	"AureoHMSBE/routes"
 	"fmt"
 	"log"
@@ -17,6 +18,11 @@ func main() {
 	routes.DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
+	}
+
+	// Run migrations
+	if err := migrations.ModifyIncomeType(routes.DB); err != nil {
+		log.Printf("Warning: Failed to modify income type: %v", err)
 	}
 
 	dbError := routes.DB.AutoMigrate(
