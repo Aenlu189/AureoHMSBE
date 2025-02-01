@@ -20,11 +20,13 @@ type Income struct {
 func AddIncome(c *gin.Context) {
 	var income Income
 	if err := c.BindJSON(&income); err != nil {
+		fmt.Printf("Error binding JSON: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
 		return
 	}
 
-	// Only validate that Type is not empty
+	fmt.Printf("Received income: %+v\n", income)
+
 	if income.Type == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Type cannot be empty"})
 		return
@@ -32,7 +34,8 @@ func AddIncome(c *gin.Context) {
 
 	income.CreatedAt = time.Now().UTC()
 	if err := DB.Create(&income).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create income record"})
+		fmt.Printf("Error creating income: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("Failed to create income record: %v", err)})
 		return
 	}
 
