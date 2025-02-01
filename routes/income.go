@@ -9,10 +9,10 @@ import (
 
 type Income struct {
 	ID         uint      `gorm:"primaryKey;autoIncrement"`
-	Type       string    `gorm:"type:varchar(255);not null"` // Increased the length of the varchar to 255
-	GuestID    uint      `gorm:"not null"`
-	Guest      Guests    `gorm:"foreignKey:GuestID"`
-	RoomNumber int       `gorm:"not null"`
+	Type       string    `gorm:"column:type;type:varchar(255)"` // Changed to explicitly set column name and type
+	GuestID    *uint     `gorm:"default:null"`                  // Changed to pointer to make it optional
+	Guest      *Guests   `gorm:"foreignKey:GuestID"`            // Changed to pointer since it's optional
+	RoomNumber int       `gorm:"default:0"`                     // Made default 0
 	Amount     float64   `gorm:"not null"`
 	CreatedAt  time.Time `gorm:"not null"`
 }
