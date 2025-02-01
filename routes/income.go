@@ -8,20 +8,22 @@ import (
 )
 
 type Income struct {
-	ID         uint      `gorm:"primaryKey;autoIncrement"`
-	Type       string    `gorm:"column:type;type:varchar(255)"` // Changed to explicitly set column name and type
-	GuestID    *uint     `gorm:"default:null"`                  // Changed to pointer to make it optional
-	Guest      *Guests   `gorm:"foreignKey:GuestID"`            // Changed to pointer since it's optional
-	RoomNumber int       `gorm:"default:0"`                     // Made default 0
-	Amount     float64   `gorm:"not null"`
-	CreatedAt  time.Time `gorm:"not null"`
+	ID          uint      `gorm:"primaryKey;autoIncrement"`
+	Type        string    `gorm:"column:type;type:varchar(255)"` // Changed to explicitly set column name and type
+	GuestID     *uint     `gorm:"default:null"`                  // Changed to pointer to make it optional
+	Guest       *Guests   `gorm:"foreignKey:GuestID"`            // Changed to pointer since it's optional
+	RoomNumber  int       `gorm:"default:0"`                     // Made default 0
+	Amount      float64   `gorm:"not null"`
+	RevenueType string    `gorm:"column:revenue_type;type:varchar(50);default:'revenue'"` // Added revenue type field
+	CreatedAt   time.Time `gorm:"not null"`
 }
 
 type IncomeRequest struct {
-	Type       string  `json:"Type"`
-	GuestID    uint    `json:"GuestID"`
-	RoomNumber int     `json:"RoomNumber"`
-	Amount     float64 `json:"Amount"`
+	Type        string  `json:"Type"`
+	GuestID     uint    `json:"GuestID"`
+	RoomNumber  int     `json:"RoomNumber"`
+	Amount      float64 `json:"Amount"`
+	RevenueType string  `json:"RevenueType"`
 }
 
 func AddIncome(c *gin.Context) {
@@ -41,10 +43,11 @@ func AddIncome(c *gin.Context) {
 
 	// Create Income record with null GuestID if it's 0
 	income := Income{
-		Type:       req.Type,
-		RoomNumber: req.RoomNumber,
-		Amount:     req.Amount,
-		CreatedAt:  time.Now().UTC(),
+		Type:        req.Type,
+		RoomNumber:  req.RoomNumber,
+		Amount:      req.Amount,
+		RevenueType: req.RevenueType,
+		CreatedAt:   time.Now().UTC(),
 	}
 
 	// Only set GuestID if it's not 0
