@@ -17,22 +17,42 @@ type Income struct {
 	CreatedAt  time.Time `gorm:"not null"`
 }
 
+type IncomeRequest struct {
+	Type       string  `json:"Type"`
+	GuestID    uint    `json:"GuestID"`
+	RoomNumber int     `json:"RoomNumber"`
+	Amount     float64 `json:"Amount"`
+}
+
 func AddIncome(c *gin.Context) {
-	var income Income
-	if err := c.BindJSON(&income); err != nil {
+	var req IncomeRequest
+	if err := c.BindJSON(&req); err != nil {
 		fmt.Printf("Error binding JSON: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
 		return
 	}
 
-	fmt.Printf("Received income: %+v\n", income)
+	fmt.Printf("Received income request: %+v\n", req)
 
-	if income.Type == "" {
+	if req.Type == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Type cannot be empty"})
 		return
 	}
 
-	income.CreatedAt = time.Now().UTC()
+	// Create Income record with null GuestID if it's 0
+	income := Income{
+		Type:       req.Type,
+		RoomNumber: req.RoomNumber,
+		Amount:     req.Amount,
+		CreatedAt:  time.Now().UTC(),
+	}
+
+	// Only set GuestID if it's not 0
+	if req.GuestID != 0 {
+		guestID := req.GuestID
+		income.GuestID = &guestID
+	}
+
 	if err := DB.Create(&income).Error; err != nil {
 		fmt.Printf("Error creating income: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("Failed to create income record: %v", err)})
