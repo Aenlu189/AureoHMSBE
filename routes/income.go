@@ -9,7 +9,7 @@ import (
 
 type Income struct {
 	ID         uint      `gorm:"primaryKey;autoIncrement"`
-	Type       string    `gorm:"type:varchar(50);not null"`
+	Type       string    `gorm:"type:varchar(255);not null"` // Increased the length of the varchar to 255
 	GuestID    uint      `gorm:"not null"`
 	Guest      Guests    `gorm:"foreignKey:GuestID"`
 	RoomNumber int       `gorm:"not null"`
@@ -20,26 +20,19 @@ type Income struct {
 func AddIncome(c *gin.Context) {
 	var income Income
 	if err := c.BindJSON(&income); err != nil {
-		fmt.Printf("Error binding JSON: %v\n", err)
-		c.JSON(http.StatusBadRequest, gin.H{"message": fmt.Sprintf("Invalid request body: %v", err)})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
 		return
 	}
 
-	fmt.Printf("Received income request: %+v\n", income)
-
-	// If type is not in validTypes and not empty, it's considered a custom type
+	// Only validate that Type is not empty
 	if income.Type == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Type cannot be empty"})
 		return
 	}
 
 	income.CreatedAt = time.Now().UTC()
-
-	// Create a new record in the database
-	result := DB.Create(&income)
-	if result.Error != nil {
-		fmt.Printf("Error creating income record: %v\n", result.Error)
-		c.JSON(http.StatusInternalServerError, gin.H{"message": fmt.Sprintf("Failed to create income record: %v", result.Error)})
+	if err := DB.Create(&income).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create income record"})
 		return
 	}
 
