@@ -8,7 +8,7 @@ import (
 
 type Income struct {
 	ID         uint      `gorm:"primaryKey;autoIncrement"`
-	Type       string    `gorm:"type:enum('CHECKED-IN', 'EXTEND-STAY', 'FOOD');not null"`
+	Type       string    `gorm:"type:varchar(50);not null"` // Changed from enum to varchar to support custom types
 	GuestID    uint      `gorm:"not null"`
 	Guest      Guests    `gorm:"foreignKey:GuestID"`
 	RoomNumber int       `gorm:"not null"`
@@ -20,6 +20,28 @@ func AddIncome(c *gin.Context) {
 	var income Income
 	if err := c.BindJSON(&income); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid request body"})
+		return
+	}
+
+	// Validate Type field
+	validTypes := map[string]bool{
+		"CHECKED-IN":        true,
+		"EXTEND-STAY":       true,
+		"FOOD":              true,
+		"EMPLOYEE_EATERIES": true,
+		"GUEST_FOOD":        true,
+		"ELECTRICITY":       true,
+	}
+
+	// If type is not in validTypes and not empty, it's considered a custom type
+	if income.Type == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Type cannot be empty"})
+		return
+	}
+
+	// Check if it's a valid type
+	if _, exists := validTypes[income.Type]; !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid payment type"})
 		return
 	}
 
