@@ -30,7 +30,8 @@ func main() {
 		&routes.Income{},
 		&routes.Staff{},
 		&routes.CleaningRecord{},
-		&routes.DailyFoodRevenue{})
+		&routes.DailyFoodRevenue{},
+		&routes.RoomPrices{})
 	if dbError != nil {
 		return
 	}
@@ -61,6 +62,10 @@ func main() {
 	router.GET("/rooms", routes.GetRooms)
 	router.GET("/rooms/:room", routes.GetRoom)
 	router.PUT("rooms/:room", routes.UpdateRoomStatus)
+
+	// Room Prices
+	router.GET("/prices", routes.GetRoomPrices)
+	router.POST("/prices", routes.UpdateRoomPrices)
 
 	//Guests
 	router.POST("/create-guest", routes.CreateGuest)
