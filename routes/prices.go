@@ -49,8 +49,9 @@ func UpdateRoomPrices(c *gin.Context) {
 		// If no prices exist, create new
 		DB.Create(&prices)
 	} else {
-		// Update existing prices
-		DB.Model(&existingPrices).Updates(prices)
+		// Update existing prices with all fields
+		prices.ID = existingPrices.ID // Preserve the ID
+		DB.Save(&prices)              // Use Save to update all fields
 	}
 
 	c.JSON(http.StatusOK, prices)
