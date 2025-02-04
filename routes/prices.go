@@ -6,12 +6,13 @@ import (
 )
 
 type RoomPrices struct {
-	ID         int     `json:"id" gorm:"primaryKey"`
-	BNFP       float64 `json:"bnfp"`     // Full Night Price
-	BCFP       float64 `json:"bcfp"`     // Caution Price
-	BSFP       float64 `json:"bsfp"`     // Session Price
-	ExtraBed   float64 `json:"ebed"`     // Extra Bed Price
-	HourlyRate float64 `json:"eachHour"` // Hourly Rate
+	ID           int     `json:"id" gorm:"primaryKey"`
+	BNFP         float64 `json:"bnfp"`         // Full Night Price
+	BCFP         float64 `json:"bcfp"`         // Caution Price
+	BSFP         float64 `json:"bsfp"`         // Session Price
+	ExtraBed     float64 `json:"ebed"`         // Extra Bed Price
+	HourlyRate   float64 `json:"eachHour"`     // Hourly Rate
+	FamilyRoomFP float64 `json:"familyRoomFp"` // Family Room Full Night Price
 }
 
 // GetRoomPrices retrieves the current room prices
@@ -21,11 +22,12 @@ func GetRoomPrices(c *gin.Context) {
 	if result.Error != nil {
 		// If no prices exist, return default prices
 		prices = RoomPrices{
-			BNFP:       63000,
-			BCFP:       42000,
-			BSFP:       30000,
-			ExtraBed:   20000,
-			HourlyRate: 10000,
+			BNFP:         63000,
+			BCFP:         42000,
+			BSFP:         30000,
+			ExtraBed:     20000,
+			HourlyRate:   10000,
+			FamilyRoomFP: 73000, // Higher price for family rooms
 		}
 		// Create default prices in database
 		DB.Create(&prices)
