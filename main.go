@@ -100,10 +100,6 @@ func main() {
 	// Admin protected routes
 	adminProtected := router.Group("/admin")
 	adminProtected.Use(routes.AdminAuthMiddleware())
-	{
-		// Add admin-specific routes here
-		adminProtected.GET("/dashboard-data", routes.GetAdminDashboardData)
-	}
 
 	// Protected routes group
 	protected := router.Group("/")
