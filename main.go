@@ -48,8 +48,9 @@ func main() {
 	router.POST("/login", routes.Login)
 	router.POST("/logout", routes.Logout)
 	router.POST("/forgot-password", routes.ForgotPassword)
-	router.POST("/admin", routes.AdminLogin)
+	router.POST("/admin/login", routes.AdminLogin)
 	router.GET("/check-auth", checkAuth)
+	router.GET("/admin/check-auth", adminCheckAuth)
 
 	// Reservation
 	router.POST("/create-reservation", routes.CreateReservation)
@@ -96,6 +97,14 @@ func main() {
 	router.GET("income/today", routes.GetTodayIncome)
 	router.GET("income/date/:date", routes.GetIncomeByDate)
 
+	// Admin protected routes
+	adminProtected := router.Group("/admin")
+	adminProtected.Use(routes.AdminAuthMiddleware())
+	{
+		// Add admin-specific routes here
+		adminProtected.GET("/dashboard-data", routes.GetAdminDashboardData)
+	}
+
 	// Protected routes group
 	protected := router.Group("/")
 	protected.Use(routes.AuthMiddleware())
@@ -119,4 +128,8 @@ func checkAuth(c *gin.Context) {
 
 	// The AuthMiddleware will handle token validation
 	routes.AuthMiddleware()(c)
+}
+
+func adminCheckAuth(c *gin.Context) {
+	routes.AdminCheckAuth(c)
 }
