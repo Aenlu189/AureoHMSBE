@@ -100,6 +100,18 @@ func main() {
 	// Admin protected routes
 	adminProtected := router.Group("/admin")
 	adminProtected.Use(routes.AdminAuthMiddleware())
+	{
+		// Food orders
+		adminProtected.GET("/food-orders/date/:date", routes.GetFoodOrdersByDate)
+		adminProtected.GET("/food-orders/all", routes.GetAllFoodOrders)
+
+		// Recent activity
+		adminProtected.GET("/activity", routes.GetRecentActivity)
+
+		// Revenue data
+		adminProtected.GET("/revenue/summary", routes.GetRevenueSummary)
+		adminProtected.GET("/revenue/range/:start/:end", routes.GetRevenueRange)
+	}
 
 	// Protected routes group
 	protected := router.Group("/")
