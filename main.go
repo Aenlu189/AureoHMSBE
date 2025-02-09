@@ -99,6 +99,9 @@ func main() {
 
 	// Admin protected routes
 	adminProtected := router.Group("/admin")
+
+	// Revenue routes
+	adminProtected.GET("/revenue/date/:date", routes.GetRevenueSummaryByDate)
 	adminProtected.Use(routes.AdminAuthMiddleware())
 	{
 		// Food orders
