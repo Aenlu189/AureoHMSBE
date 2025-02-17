@@ -85,7 +85,7 @@ func GetRecentActivity(c *gin.Context) {
 			Amount:        income.Amount,
 			RoomNumber:    income.RoomNumber,
 			Description:   income.RevenueType,
-			PaymentMethod: income.PaymentMethod,
+			PaymentMethod: income.Guest.PaymentType,
 			Timestamp:     income.CreatedAt,
 		}
 		if income.GuestID != nil {
@@ -144,7 +144,7 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	// Get activities for the day
 	var incomes []Income
-	if err := DB.Where("DATE(created_at) = ?", date).Order("created_at DESC").Find(&incomes).Error; err != nil {
+	if err := DB.Preload("Guest").Where("DATE(created_at) = ?", date).Order("created_at DESC").Find(&incomes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
 		return
 	}
@@ -156,7 +156,7 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 			Amount:        income.Amount,
 			RoomNumber:    income.RoomNumber,
 			Description:   income.RevenueType,
-			PaymentMethod: income.PaymentMethod,
+			PaymentMethod: income.Guest.PaymentType,
 			Timestamp:     income.CreatedAt,
 		}
 		if income.GuestID != nil {
