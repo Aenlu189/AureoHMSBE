@@ -26,6 +26,7 @@ type Activity struct {
 	GuestID       uint      `json:"guestId,omitempty"`
 	Description   string    `json:"description,omitempty"`
 	PaymentMethod string    `json:"payment_method,omitempty"`
+	RoomType      string    `json:"roomType,omitempty"`
 	Timestamp     time.Time `json:"timestamp"`
 }
 
@@ -88,6 +89,7 @@ func GetRecentActivity(c *gin.Context) {
 			RoomNumber:    income.RoomNumber,
 			Description:   income.RevenueType,
 			PaymentMethod: income.Guest.PaymentType,
+			RoomType:      income.Guest.RoomType,
 			Timestamp:     income.CreatedAt,
 		}
 		if income.GuestID != nil {
@@ -173,6 +175,7 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 			RoomNumber:    income.RoomNumber,
 			Description:   income.RevenueType,
 			PaymentMethod: income.Guest.PaymentType,
+			RoomType:      income.Guest.RoomType,
 			Timestamp:     income.CreatedAt,
 		}
 		if income.GuestID != nil {
