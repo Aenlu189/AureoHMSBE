@@ -17,13 +17,14 @@ type RevenueData struct {
 }
 
 type Activity struct {
-	Type        string    `json:"type"`
-	Message     string    `json:"message"`
-	Amount      float64   `json:"amount"`
-	RoomNumber  int       `json:"roomNumber,omitempty"`
-	GuestID     uint      `json:"guestId,omitempty"`
-	Description string    `json:"description,omitempty"`
-	Timestamp   time.Time `json:"timestamp"`
+	Type          string    `json:"type"`
+	Message       string    `json:"message"`
+	Amount        float64   `json:"amount"`
+	RoomNumber    int       `json:"roomNumber,omitempty"`
+	GuestID       uint      `json:"guestId,omitempty"`
+	Description   string    `json:"description,omitempty"`
+	PaymentMethod string    `json:"payment_method,omitempty"`
+	Timestamp     time.Time `json:"timestamp"`
 }
 
 func GetFoodOrdersByDate(c *gin.Context) {
@@ -79,12 +80,13 @@ func GetRecentActivity(c *gin.Context) {
 
 	for _, income := range incomes {
 		activity := Activity{
-			Type:        income.Type,
-			Message:     fmt.Sprintf("%s Revenue", income.Type),
-			Amount:      income.Amount,
-			RoomNumber:  income.RoomNumber,
-			Description: income.RevenueType,
-			Timestamp:   income.CreatedAt,
+			Type:          income.Type,
+			Message:       fmt.Sprintf("%s Revenue", income.Type),
+			Amount:        income.Amount,
+			RoomNumber:    income.RoomNumber,
+			Description:   income.RevenueType,
+			PaymentMethod: income.PaymentMethod,
+			Timestamp:     income.CreatedAt,
 		}
 		if income.GuestID != nil {
 			activity.GuestID = *income.GuestID
@@ -149,12 +151,13 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	for _, income := range incomes {
 		activity := Activity{
-			Type:        income.Type,
-			Message:     fmt.Sprintf("%s Revenue", income.Type),
-			Amount:      income.Amount,
-			RoomNumber:  income.RoomNumber,
-			Description: income.RevenueType,
-			Timestamp:   income.CreatedAt,
+			Type:          income.Type,
+			Message:       fmt.Sprintf("%s Revenue", income.Type),
+			Amount:        income.Amount,
+			RoomNumber:    income.RoomNumber,
+			Description:   income.RevenueType,
+			PaymentMethod: income.PaymentMethod,
+			Timestamp:     income.CreatedAt,
 		}
 		if income.GuestID != nil {
 			activity.GuestID = *income.GuestID
