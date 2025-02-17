@@ -9,11 +9,13 @@ import (
 )
 
 type RevenueData struct {
-	TotalRevenue float64   `json:"totalRevenue"`
-	RoomRevenue  float64   `json:"roomRevenue"`
-	FoodRevenue  float64   `json:"foodRevenue"`
-	OtherRevenue float64   `json:"otherRevenue"`
-	Date         time.Time `json:"date"`
+	TotalRevenue      float64   `json:"totalRevenue"`
+	RoomRevenue       float64   `json:"roomRevenue"`
+	RoomCashRevenue   float64   `json:"roomCashRevenue"`
+	RoomOnlineRevenue float64   `json:"roomOnlineRevenue"`
+	FoodRevenue       float64   `json:"foodRevenue"`
+	OtherRevenue      float64   `json:"otherRevenue"`
+	Date              time.Time `json:"date"`
 }
 
 type Activity struct {
@@ -121,10 +123,24 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 	var revenue RevenueData
 	var activities []Activity
 
-	// Get room revenue
-	var roomIncome float64
-	if err := DB.Model(&Income{}).Where("DATE(created_at) = ? AND type = 'room'", date).Select("COALESCE(SUM(amount), 0)").Scan(&roomIncome).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room revenue"})
+	// Get room revenue split by payment type
+	var roomCashIncome float64
+	var roomOnlineIncome float64
+	if err := DB.Model(&Income{}).
+		Joins("JOIN guests ON incomes.guest_id = guests.id").
+		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type = 'CASH'", date).
+		Select("COALESCE(SUM(incomes.amount), 0)").
+		Scan(&roomCashIncome).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room cash revenue"})
+		return
+	}
+
+	if err := DB.Model(&Income{}).
+		Joins("JOIN guests ON incomes.guest_id = guests.id").
+		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type IN ('KPAY', 'AYAPAY', 'WAVEPAY')", date).
+		Select("COALESCE(SUM(incomes.amount), 0)").
+		Scan(&roomOnlineIncome).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room online revenue"})
 		return
 	}
 
@@ -166,11 +182,13 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 	}
 
 	revenue = RevenueData{
-		TotalRevenue: roomIncome + foodIncome + otherIncome,
-		RoomRevenue:  roomIncome,
-		FoodRevenue:  foodIncome,
-		OtherRevenue: otherIncome,
-		Date:         time.Now(),
+		TotalRevenue:      roomCashIncome + roomOnlineIncome + foodIncome + otherIncome,
+		RoomRevenue:       roomCashIncome + roomOnlineIncome,
+		RoomCashRevenue:   roomCashIncome,
+		RoomOnlineRevenue: roomOnlineIncome,
+		FoodRevenue:       foodIncome,
+		OtherRevenue:      otherIncome,
+		Date:              time.Now(),
 	}
 
 	c.JSON(http.StatusOK, gin.H{
