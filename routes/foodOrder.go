@@ -342,3 +342,22 @@ func GetFoodRevenueByDate(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"foodRevenue": totalRevenue})
 }
+
+func SearchMenu(c *gin.Context) {
+	searchTerm := c.Query("term")
+	var menus []Menu
+
+	if searchTerm != "" {
+		if err := DB.Where("food_name LIKE ?", "%"+searchTerm+"%").Find(&menus).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to search menu items"})
+			return
+		}
+	} else {
+		if err := DB.Find(&menus).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch menu items"})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, menus)
+}

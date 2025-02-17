@@ -89,6 +89,7 @@ func main() {
 	router.GET("food/menus", routes.GetMenu)
 	router.GET("food/menu/:id", routes.GetMenuByID)
 	router.GET("food/menus/:foodName", routes.GetMenuByName)
+	router.GET("food/search", routes.SearchMenu)
 	router.PUT("/menu/:id", routes.UpdateMenu)
 	router.DELETE("/menu/:id", routes.DeleteMenu)
 
