@@ -46,7 +46,7 @@ func main() {
 
 	// Authentication
 	router.POST("/login", routes.Login)
-	router.POST("/admin-login", routes.AdminLogin)
+	router.POST("/admin/login", routes.AdminLogin)
 	router.POST("/logout", routes.Logout)
 	router.POST("/forgot-password", routes.ForgotPassword)
 	router.POST("/staff-login", routes.StaffLogin)
