@@ -43,14 +43,9 @@ func main() {
 
 	// CORS configuration
 	config := cors.Config{
-		AllowOriginFunc: func(origin string) bool {
-			allowedOrigins := map[string]bool{
-				"https://aureocloud.co.uk":         true,
-				"https://hotelaureoyangon.com":     true,
-				"https://www.hotelaureoyangon.com": true,
-				"http://localhost:5500":            true,
-			}
-			return allowedOrigins[origin]
+		AllowOrigins: []string{
+			"https://hotelaureoyangon.com",
+			"https://aureocloud.co.uk",
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type", "Accept"},
