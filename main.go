@@ -46,9 +46,15 @@ func main() {
 
 	// Authentication
 	router.POST("/login", routes.Login)
+	router.POST("/admin-login", routes.AdminLogin)
 	router.POST("/logout", routes.Logout)
 	router.POST("/forgot-password", routes.ForgotPassword)
-	router.POST("/admin/login", routes.AdminLogin)
+	router.POST("/staff-login", routes.StaffLogin)
+
+	// Hotel website booking endpoint
+	router.POST("/website-booking", routes.HandleWebsiteBooking)
+
+	// Get routes
 	router.GET("/check-auth", checkAuth)
 	router.GET("/admin/check-auth", adminCheckAuth)
 
