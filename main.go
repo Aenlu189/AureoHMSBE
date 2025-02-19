@@ -39,35 +39,9 @@ func main() {
 
 	router := gin.Default()
 
-	// Handle multiple domains
+	// Let Nginx handle CORS
 	router.Use(func(c *gin.Context) {
-		switch c.Request.Host {
-		case "hotelaureoyangon.com":
-			// Serve hotel website static files
-			if c.Request.URL.Path == "/" {
-				c.File("./hotelaureoyangon/index.html")
-				return
-			}
-			// Handle website booking API endpoint
-			if c.Request.URL.Path == "/api/book" && c.Request.Method == "POST" {
-				routes.HandleWebsiteBooking(c)
-				return
-			}
-			// Serve other static files
-			c.File("./hotelaureoyangon" + c.Request.URL.Path)
-			return
-
-		case "aureocloud.co.uk":
-			// Continue to API routes for existing cloud system
-			c.Next()
-			return
-
-		default:
-			// Handle unknown domains
-			c.JSON(http.StatusNotFound, gin.H{"error": "Domain not found"})
-			c.Abort()
-			return
-		}
+		c.Next()
 	})
 
 	// Authentication
