@@ -3,12 +3,10 @@ package main
 import (
 	"AureoHMSBE/routes"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
-	"time"
 
-	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -41,25 +39,10 @@ func main() {
 
 	router := gin.Default()
 
-	// CORS configuration
-	config := cors.Config{
-		AllowOriginFunc: func(origin string) bool {
-			allowedOrigins := map[string]bool{
-				"https://aureocloud.co.uk":         true,
-				"https://hotelaureoyangon.com":     true,
-				"https://www.hotelaureoyangon.com": true,
-				"http://localhost:5500":            true,
-			}
-			return allowedOrigins[origin]
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type", "Accept"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}
-
-	// Apply CORS middleware
-	router.Use(cors.New(config))
+	// Let Nginx handle CORS
+	router.Use(func(c *gin.Context) {
+		c.Next()
+	})
 
 	// Authentication
 	router.POST("/login", routes.Login)
