@@ -5,19 +5,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"net/http"
+	"strings"
 	"time"
 )
 
 type FoodOrder struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement"`
-	GuestID   uint      `gorm:"not null"`
-	RoomID    uint      `gorm:"not null"`
-	FoodName  string    `gorm:"not null"`
-	Price     float64   `gorm:"not null"`
-	Quantity  uint      `gorm:"not null"`
-	OrderTime time.Time `gorm:"type:datetime;not null"`
-	CreatedAt time.Time `gorm:"autoCreateTime"`
-	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+	ID            uint      `gorm:"primaryKey;autoIncrement"`
+	GuestID       uint      `gorm:"not null"`
+	RoomID        uint      `gorm:"not null"`
+	FoodName      string    `gorm:"not null"`
+	Price         float64   `gorm:"not null"`
+	Quantity      uint      `gorm:"not null"`
+	OrderTime     time.Time `gorm:"type:datetime;not null"`
+	PaymentMethod string    `gorm:"type:varchar(10);default:'CASH'"`
+	PaymentStatus string    `gorm:"type:varchar(20);default:'PENDING'"`
+	CreatedAt     time.Time `gorm:"autoCreateTime"`
+	UpdatedAt     time.Time `gorm:"autoUpdateTime"`
 }
 
 func (order *FoodOrder) BeforeCreate(tx *gorm.DB) error {
@@ -47,6 +50,18 @@ type DailyFoodRevenue struct {
 	Revenue   float64   `gorm:"not null;default:0"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	UpdatedAt time.Time `gorm:"autoUpdateTime"`
+}
+
+// Validate payment method
+func isValidPaymentMethod(method string) bool {
+	validMethods := []string{"CASH", "KPAY", "AYAPAY", "WAVEPAY"}
+	method = strings.ToUpper(method)
+	for _, valid := range validMethods {
+		if method == valid {
+			return true
+		}
+	}
+	return false
 }
 
 func CreateMenu(c *gin.Context) {
@@ -177,21 +192,39 @@ func CreateFoodOrder(c *gin.Context) {
 		return
 	}
 
+	// Validate payment method
+	if order.PaymentMethod == "" {
+		order.PaymentMethod = "CASH"
+	} else if !isValidPaymentMethod(order.PaymentMethod) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid payment method"})
+		return
+	}
+
+	// Set initial payment status
+	if order.PaymentMethod == "CASH" {
+		order.PaymentStatus = "PAID"
+	} else {
+		order.PaymentStatus = "PENDING"
+	}
+
 	if err := DB.Create(&order).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to create food order: " + err.Error()})
 		return
 	}
 
-	var guest Guests
-	if err := DB.First(&guest, "room_number = ?", order.RoomID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update guest food charges"})
-		return
-	}
+	// Only update guest's food charges for cash payments
+	if order.PaymentMethod == "CASH" {
+		var guest Guests
+		if err := DB.First(&guest, "room_number = ?", order.RoomID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update guest food charges"})
+			return
+		}
 
-	guest.FoodCharges += int(order.Price)
-	if err := DB.Save(&guest).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update guest food charges"})
-		return
+		guest.FoodCharges += int(order.Price)
+		if err := DB.Save(&guest).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update guest food charges"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -220,12 +253,21 @@ func GetFoodOrdersByRoom(c *gin.Context) {
 	roomID := c.Param("roomId")
 	var orders []FoodOrder
 
-	if err := DB.Where("room_id = ?", roomID).Find(&orders).Error; err != nil {
+	if err := DB.Where("room_id = ?", roomID).
+		Order("created_at DESC").
+		Find(&orders).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch food orders"})
 		return
 	}
 
-	c.JSON(http.StatusOK, orders)
+	c.JSON(http.StatusOK, gin.H{
+		"orders": orders,
+		"summary": map[string]interface{}{
+			"total_orders":     len(orders),
+			"pending_payments": countPendingPayments(orders),
+			"total_amount":     calculateTotalAmount(orders),
+		},
+	})
 }
 
 func GetFoodOrdersByGuestID(c *gin.Context) {
@@ -360,4 +402,94 @@ func SearchMenu(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, menus)
+}
+
+// New function to handle payment confirmation
+func UpdateFoodOrderPayment(c *gin.Context) {
+	id := c.Param("id")
+	var order FoodOrder
+
+	if err := DB.First(&order, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Food order not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch food order"})
+		return
+	}
+
+	var paymentUpdate struct {
+		PaymentStatus string `json:"payment_status"`
+	}
+
+	if err := c.BindJSON(&paymentUpdate); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	// Validate payment status
+	if !isValidPaymentStatus(paymentUpdate.PaymentStatus) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid payment status"})
+		return
+	}
+
+	// If payment is confirmed, update guest's food charges
+	if paymentUpdate.PaymentStatus == "PAID" && order.PaymentStatus != "PAID" {
+		var guest Guests
+		if err := DB.First(&guest, "room_number = ?", order.RoomID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update guest food charges"})
+			return
+		}
+
+		guest.FoodCharges += int(order.Price)
+		if err := DB.Save(&guest).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update guest food charges"})
+			return
+		}
+	}
+
+	// Update order payment status
+	order.PaymentStatus = paymentUpdate.PaymentStatus
+	if err := DB.Save(&order).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to update payment status"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Payment status updated successfully",
+		"order":   order,
+	})
+}
+
+// Helper function to validate payment status
+func isValidPaymentStatus(status string) bool {
+	validStatuses := []string{"PENDING", "PAID", "FAILED", "CANCELLED"}
+	status = strings.ToUpper(status)
+	for _, valid := range validStatuses {
+		if status == valid {
+			return true
+		}
+	}
+	return false
+}
+
+// Helper functions for order summary
+func countPendingPayments(orders []FoodOrder) int {
+	count := 0
+	for _, order := range orders {
+		if order.PaymentStatus == "PENDING" {
+			count++
+		}
+	}
+	return count
+}
+
+func calculateTotalAmount(orders []FoodOrder) float64 {
+	var total float64
+	for _, order := range orders {
+		if order.PaymentStatus == "PAID" {
+			total += order.Price * float64(order.Quantity)
+		}
+	}
+	return total
 }
