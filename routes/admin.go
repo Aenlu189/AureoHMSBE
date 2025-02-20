@@ -125,6 +125,23 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 	var revenue RevenueData
 	var activities []Activity
 
+	// Parse and validate the date
+	parsedDate, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+		return
+	}
+
+	// Get tomorrow's date (start of day)
+	tomorrow := time.Now().AddDate(0, 0, 1)
+	tomorrow = time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, tomorrow.Location())
+
+	// Check if date is after tomorrow
+	if parsedDate.After(tomorrow) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot fetch revenue for future dates"})
+		return
+	}
+
 	// Get room revenue split by payment type
 	var roomCashIncome float64
 	var roomOnlineIncome float64
