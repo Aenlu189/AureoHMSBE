@@ -137,17 +137,17 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	fmt.Printf("[Revenue Debug] Parsed date: %v\n", parsedDate)
 
-	// Get current date in UTC and ensure it's the real current date
-	realNow := time.Date(2024, time.February, 20, 0, 0, 0, 0, time.UTC)
-	fmt.Printf("[Revenue Debug] Real current time: %v\n", realNow)
+	// Get current date in UTC
+	now := time.Now().UTC()
+	fmt.Printf("[Revenue Debug] Current UTC time: %v\n", now)
 
 	// Convert parsedDate to UTC for comparison
 	parsedDateUTC := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, time.UTC)
 	fmt.Printf("[Revenue Debug] Parsed date in UTC: %v\n", parsedDateUTC)
 
 	// Don't allow future dates
-	if parsedDateUTC.After(realNow) {
-		fmt.Printf("[Revenue Debug] Rejected future date. Parsed: %v, RealNow: %v\n", parsedDateUTC, realNow)
+	if parsedDateUTC.After(now) {
+		fmt.Printf("[Revenue Debug] Rejected future date. Parsed: %v, Now: %v\n", parsedDateUTC, now)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot fetch revenue for future dates"})
 		return
 	}
