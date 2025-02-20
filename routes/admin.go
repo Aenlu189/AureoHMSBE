@@ -122,50 +122,102 @@ func GetRecentActivity(c *gin.Context) {
 
 func GetRevenueSummaryByDate(c *gin.Context) {
 	date := c.Param("date")
+	fmt.Printf("[Revenue Debug] Received request for date: %s\n", date)
+
 	var revenue RevenueData
 	var activities []Activity
+
+	// Parse and validate the date
+	parsedDate, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		fmt.Printf("[Revenue Debug] Date parsing error: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+		return
+	}
+
+	fmt.Printf("[Revenue Debug] Parsed date: %v\n", parsedDate)
+
+	// Get current date in UTC
+	now := time.Now().UTC()
+	fmt.Printf("[Revenue Debug] Current UTC time: %v\n", now)
+
+	// Convert parsedDate to UTC for comparison
+	parsedDateUTC := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, time.UTC)
+	fmt.Printf("[Revenue Debug] Parsed date in UTC: %v\n", parsedDateUTC)
+
+	// Don't allow future dates
+	if parsedDateUTC.After(now) {
+		fmt.Printf("[Revenue Debug] Rejected future date. Parsed: %v, Now: %v\n", parsedDateUTC, now)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot fetch revenue for future dates"})
+		return
+	}
 
 	// Get room revenue split by payment type
 	var roomCashIncome float64
 	var roomOnlineIncome float64
+
+	fmt.Printf("[Revenue Debug] Querying room cash revenue for date: %s\n", date)
 	if err := DB.Model(&Income{}).
 		Joins("JOIN guests ON incomes.guest_id = guests.id").
 		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type = 'CASH'", date).
 		Select("COALESCE(SUM(incomes.amount), 0)").
 		Scan(&roomCashIncome).Error; err != nil {
+		fmt.Printf("[Revenue Debug] Error fetching room cash revenue: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room cash revenue"})
 		return
 	}
+	fmt.Printf("[Revenue Debug] Room cash revenue: %v\n", roomCashIncome)
 
+	fmt.Printf("[Revenue Debug] Querying room online revenue for date: %s\n", date)
 	if err := DB.Model(&Income{}).
 		Joins("JOIN guests ON incomes.guest_id = guests.id").
 		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type IN ('KPAY', 'AYAPAY', 'WAVEPAY')", date).
 		Select("COALESCE(SUM(incomes.amount), 0)").
 		Scan(&roomOnlineIncome).Error; err != nil {
+		fmt.Printf("[Revenue Debug] Error fetching room online revenue: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room online revenue"})
 		return
 	}
+	fmt.Printf("[Revenue Debug] Room online revenue: %v\n", roomOnlineIncome)
 
 	// Get food revenue
 	var foodIncome float64
-	if err := DB.Model(&Income{}).Where("DATE(created_at) = ? AND type = 'food'", date).Select("COALESCE(SUM(amount), 0)").Scan(&foodIncome).Error; err != nil {
+	fmt.Printf("[Revenue Debug] Querying food revenue for date: %s\n", date)
+	if err := DB.Model(&Income{}).
+		Where("DATE(created_at) = ? AND type = 'food'", date).
+		Select("COALESCE(SUM(amount), 0)").
+		Scan(&foodIncome).Error; err != nil {
+		fmt.Printf("[Revenue Debug] Error fetching food revenue: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch food revenue"})
 		return
 	}
+	fmt.Printf("[Revenue Debug] Food revenue: %v\n", foodIncome)
 
 	// Get other revenue
 	var otherIncome float64
-	if err := DB.Model(&Income{}).Where("DATE(created_at) = ? AND type NOT IN ('room', 'food')", date).Select("COALESCE(SUM(amount), 0)").Scan(&otherIncome).Error; err != nil {
+	fmt.Printf("[Revenue Debug] Querying other revenue for date: %s\n", date)
+	if err := DB.Model(&Income{}).
+		Where("DATE(created_at) = ? AND type NOT IN ('room', 'food')", date).
+		Select("COALESCE(SUM(amount), 0)").
+		Scan(&otherIncome).Error; err != nil {
+		fmt.Printf("[Revenue Debug] Error fetching other revenue: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch other revenue"})
 		return
 	}
+	fmt.Printf("[Revenue Debug] Other revenue: %v\n", otherIncome)
 
 	// Get activities for the day
+	fmt.Printf("[Revenue Debug] Querying activities for date: %s\n", date)
 	var incomes []Income
-	if err := DB.Preload("Guest").Where("DATE(created_at) = ?", date).Order("created_at DESC").Find(&incomes).Error; err != nil {
+	if err := DB.Preload("Guest").
+		Where("DATE(created_at) = ?", date).
+		Order("created_at DESC").
+		Find(&incomes).Error; err != nil {
+		fmt.Printf("[Revenue Debug] Error fetching activities: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
 		return
 	}
+	fmt.Printf("[Revenue Debug] Found %d activities\n", len(incomes))
 
 	for _, income := range incomes {
 		activity := Activity{
@@ -194,6 +246,7 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 		Date:              time.Now(),
 	}
 
+	fmt.Printf("[Revenue Debug] Sending response with total revenue: %v\n", revenue.TotalRevenue)
 	c.JSON(http.StatusOK, gin.H{
 		"revenue":    revenue,
 		"activities": activities,
