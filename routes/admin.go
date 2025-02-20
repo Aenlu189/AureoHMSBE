@@ -241,6 +241,7 @@ func GetActivitiesByDate(db *gorm.DB, date time.Time) ([]Income, error) {
 // GetRevenueByDate handles GET /admin/revenue/date/:date
 func GetRevenueByDate(c *gin.Context) {
 	date := c.Param("date")
+	fmt.Printf("Fetching revenue for date: %s\n", date) // Debug log
 	if date == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Date parameter is required"})
 		return
@@ -253,46 +254,25 @@ func GetRevenueByDate(c *gin.Context) {
 		return
 	}
 
-	// Get activities and calculate revenue
-	var result struct {
-		Activities        []Income `json:"activities"`
-		TotalRevenue      float64  `json:"totalRevenue"`
-		RoomCashRevenue   float64  `json:"roomCashRevenue"`
-		RoomOnlineRevenue float64  `json:"roomOnlineRevenue"`
-		FoodRevenue       float64  `json:"foodRevenue"`
-		OtherRevenue      float64  `json:"otherRevenue"`
-	}
-
 	// Get activities for the date
-	result.Activities, err = GetActivitiesByDate(DB, parsedDate)
+	activities, err := GetActivitiesByDate(DB, parsedDate)
+	fmt.Printf("Found %d activities\n", len(activities)) // Debug log
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
 		return
 	}
 
-	// Calculate revenues
-	for _, activity := range result.Activities {
-		amount := activity.Amount
-
-		switch activity.Type {
-		case "CHECKED-IN", "EXTEND-STAY":
-			if isOnlinePayment(activity.PaymentMethod) {
-				result.RoomOnlineRevenue += amount
-			} else {
-				result.RoomCashRevenue += amount
-			}
-		case "FOOD", "EMPLOYEE_FOOD", "GUEST_FOOD":
-			result.FoodRevenue += amount
-		default:
-			result.OtherRevenue += amount
-		}
+	// Debug log activity data
+	for i, activity := range activities {
+		fmt.Printf("Activity %d: Type=%s, Amount=%f\n", i, activity.Type, activity.Amount)
 	}
 
-	result.TotalRevenue = result.RoomCashRevenue + result.RoomOnlineRevenue +
-		result.FoodRevenue + result.OtherRevenue
-
 	// Format the response
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{
+		"activities": activities,
+		"date":       date,
+		"success":    true,
+	})
 }
 
 func isOnlinePayment(method string) bool {
