@@ -125,26 +125,6 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 	var revenue RevenueData
 	var activities []Activity
 
-	// Parse and validate the date
-	parsedDate, err := time.Parse("2006-01-02", date)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
-		return
-	}
-
-	// Get current date in UTC
-	now := time.Now().UTC()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-
-	// Convert parsedDate to UTC for comparison
-	parsedDateUTC := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, time.UTC)
-
-	// Don't allow future dates
-	if parsedDateUTC.After(today) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot fetch revenue for future dates"})
-		return
-	}
-
 	// Get room revenue split by payment type
 	var roomCashIncome float64
 	var roomOnlineIncome float64
