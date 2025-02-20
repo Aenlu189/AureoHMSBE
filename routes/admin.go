@@ -220,19 +220,28 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 	fmt.Printf("[Revenue Debug] Found %d activities\n", len(incomes))
 
 	for _, income := range incomes {
+		// Initialize activity with safe defaults
 		activity := Activity{
 			Type:          income.Type,
 			Message:       fmt.Sprintf("%s Revenue", income.Type),
 			Amount:        income.Amount,
 			RoomNumber:    income.RoomNumber,
 			Description:   income.RevenueType,
-			PaymentMethod: income.Guest.PaymentType,
-			RoomType:      income.Guest.RoomType,
+			PaymentMethod: "CASH", // Default to CASH if Guest is nil
+			RoomType:      "",     // Empty string if Guest is nil
 			Timestamp:     income.CreatedAt,
 		}
+
+		// Only set Guest-related fields if Guest exists
+		if income.Guest != nil {
+			activity.PaymentMethod = income.Guest.PaymentType
+			activity.RoomType = income.Guest.RoomType
+		}
+
 		if income.GuestID != nil {
 			activity.GuestID = *income.GuestID
 		}
+
 		activities = append(activities, activity)
 	}
 
