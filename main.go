@@ -106,11 +106,14 @@ func main() {
 
 	// Admin protected routes
 	adminProtected := router.Group("/admin")
-
-	// Revenue routes
-	adminProtected.GET("/revenue/date/:date", routes.GetRevenueSummaryByDate)
 	adminProtected.Use(routes.AdminAuthMiddleware())
 	{
+		// Revenue routes
+		adminProtected.GET("/revenue", routes.GetRevenue)
+		adminProtected.GET("/revenue/date/:date", routes.GetRevenueByDate)
+		adminProtected.GET("/revenue/month/:month", routes.GetRevenueByMonth)
+		adminProtected.GET("/revenue/year/:year", routes.GetRevenueByYear)
+
 		// Food orders
 		adminProtected.GET("/food-orders/date/:date", routes.GetFoodOrdersByDate)
 		adminProtected.GET("/food-orders/all", routes.GetAllFoodOrders)
@@ -133,7 +136,11 @@ func main() {
 	// Admin routes
 	admin := router.Group("/admin")
 	{
+		admin.GET("/revenue", routes.GetRevenue)
 		admin.GET("/revenue/date/:date", routes.GetRevenueByDate)
+		admin.GET("/revenue/month/:month", routes.GetRevenueByMonth)
+		admin.GET("/revenue/year/:year", routes.GetRevenueByYear)
+		// ... other admin routes
 	}
 
 	// Start the server
