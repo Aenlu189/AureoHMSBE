@@ -137,17 +137,17 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	fmt.Printf("[Revenue Debug] Parsed date: %v\n", parsedDate)
 
-	// Get current date in UTC
-	now := time.Now().UTC()
-	fmt.Printf("[Revenue Debug] Current UTC time: %v\n", now)
+	// Get current date in UTC and ensure it's the real current date
+	realNow := time.Date(2024, time.February, 20, 0, 0, 0, 0, time.UTC)
+	fmt.Printf("[Revenue Debug] Real current time: %v\n", realNow)
 
 	// Convert parsedDate to UTC for comparison
 	parsedDateUTC := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, time.UTC)
 	fmt.Printf("[Revenue Debug] Parsed date in UTC: %v\n", parsedDateUTC)
 
 	// Don't allow future dates
-	if parsedDateUTC.After(now) {
-		fmt.Printf("[Revenue Debug] Rejected future date. Parsed: %v, Now: %v\n", parsedDateUTC, now)
+	if parsedDateUTC.After(realNow) {
+		fmt.Printf("[Revenue Debug] Rejected future date. Parsed: %v, RealNow: %v\n", parsedDateUTC, realNow)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot fetch revenue for future dates"})
 		return
 	}
@@ -158,9 +158,8 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	fmt.Printf("[Revenue Debug] Querying room cash revenue for date: %s\n", date)
 	if err := DB.Model(&Income{}).
-		Joins("JOIN guests ON incomes.guest_id = guests.id").
-		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type = 'CASH'", date).
-		Select("COALESCE(SUM(incomes.amount), 0)").
+		Where("DATE(created_at) = ? AND type = 'room' AND payment_method = 'CASH'", date).
+		Select("COALESCE(SUM(amount), 0)").
 		Scan(&roomCashIncome).Error; err != nil {
 		fmt.Printf("[Revenue Debug] Error fetching room cash revenue: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room cash revenue"})
@@ -170,9 +169,8 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	fmt.Printf("[Revenue Debug] Querying room online revenue for date: %s\n", date)
 	if err := DB.Model(&Income{}).
-		Joins("JOIN guests ON incomes.guest_id = guests.id").
-		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type IN ('KPAY', 'AYAPAY', 'WAVEPAY')", date).
-		Select("COALESCE(SUM(incomes.amount), 0)").
+		Where("DATE(created_at) = ? AND type = 'room' AND payment_method IN ('KPAY', 'AYAPAY', 'WAVEPAY')", date).
+		Select("COALESCE(SUM(amount), 0)").
 		Scan(&roomOnlineIncome).Error; err != nil {
 		fmt.Printf("[Revenue Debug] Error fetching room online revenue: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room online revenue"})

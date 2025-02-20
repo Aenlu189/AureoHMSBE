@@ -43,6 +43,11 @@ func AddIncome(c *gin.Context) {
 		return
 	}
 
+	// Set default payment method to CASH if not provided
+	if req.PaymentMethod == "" {
+		req.PaymentMethod = "CASH"
+	}
+
 	// Create Income record with null GuestID if it's 0
 	income := Income{
 		Type:          req.Type,
