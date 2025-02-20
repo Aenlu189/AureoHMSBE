@@ -182,7 +182,7 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 	var foodIncome float64
 	fmt.Printf("[Revenue Debug] Querying food revenue for date: %s\n", date)
 	if err := DB.Model(&Income{}).
-		Where("DATE(created_at) = ? AND type = 'food'", date).
+		Where("DATE(created_at) = ? AND (type = 'food' OR type = 'food_order')", date).
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&foodIncome).Error; err != nil {
 		fmt.Printf("[Revenue Debug] Error fetching food revenue: %v\n", err)
@@ -195,7 +195,7 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 	var otherIncome float64
 	fmt.Printf("[Revenue Debug] Querying other revenue for date: %s\n", date)
 	if err := DB.Model(&Income{}).
-		Where("DATE(created_at) = ? AND type NOT IN ('room', 'food')", date).
+		Where("DATE(created_at) = ? AND type NOT IN ('room', 'food', 'food_order')", date).
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&otherIncome).Error; err != nil {
 		fmt.Printf("[Revenue Debug] Error fetching other revenue: %v\n", err)
