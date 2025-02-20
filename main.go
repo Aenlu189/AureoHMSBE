@@ -104,27 +104,22 @@ func main() {
 	router.GET("income/today", routes.GetTodayIncome)
 	router.GET("income/date/:date", routes.GetIncomeByDate)
 
-	// Admin protected routes
-	adminProtected := router.Group("/admin")
-	adminProtected.Use(routes.AdminAuthMiddleware())
-	{
-		// Revenue routes
-		adminProtected.GET("/revenue", routes.GetRevenue)
-		adminProtected.GET("/revenue/date/:date", routes.GetRevenueByDate)
-		adminProtected.GET("/revenue/month/:month", routes.GetRevenueByMonth)
-		adminProtected.GET("/revenue/year/:year", routes.GetRevenueByYear)
+	// Admin routes without protection
+	router.GET("/admin/revenue", routes.GetRevenue)
+	router.GET("/admin/revenue/date/:date", routes.GetRevenueByDate)
+	router.GET("/admin/revenue/month/:month", routes.GetRevenueByMonth)
+	router.GET("/admin/revenue/year/:year", routes.GetRevenueByYear)
 
-		// Food orders
-		adminProtected.GET("/food-orders/date/:date", routes.GetFoodOrdersByDate)
-		adminProtected.GET("/food-orders/all", routes.GetAllFoodOrders)
+	// Food orders
+	router.GET("/admin/food-orders/date/:date", routes.GetFoodOrdersByDate)
+	router.GET("/admin/food-orders/all", routes.GetAllFoodOrders)
 
-		// Recent activity
-		adminProtected.GET("/activity", routes.GetRecentActivity)
+	// Recent activity
+	router.GET("/admin/activity", routes.GetRecentActivity)
 
-		// Revenue data
-		adminProtected.GET("/revenue/summary", routes.GetRevenueSummary)
-		adminProtected.GET("/revenue/range/:start/:end", routes.GetRevenueRange)
-	}
+	// Revenue data
+	router.GET("/admin/revenue/summary", routes.GetRevenueSummary)
+	router.GET("/admin/revenue/range/:start/:end", routes.GetRevenueRange)
 
 	// Protected routes group
 	protected := router.Group("/")
