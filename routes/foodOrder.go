@@ -204,7 +204,7 @@ func CreateFoodOrder(c *gin.Context) {
 	if order.PaymentMethod == "CASH" {
 		order.PaymentStatus = "PAID"
 	} else {
-		order.PaymentStatus = "PENDING"
+		order.PaymentStatus = "PAID"
 	}
 
 	if err := DB.Create(&order).Error; err != nil {
