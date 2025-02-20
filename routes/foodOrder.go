@@ -390,73 +390,51 @@ func DeleteFoodOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Food order deleted successfully"})
 }
 
-func GetDailyFoodRevenue() map[string]float64 {
-	var revenues []DailyFoodRevenue
-	today := time.Now().UTC().Truncate(24 * time.Hour)
+func GetDailyFoodRevenue() float64 {
+	now := time.Now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
-	if err := DB.Where("date = ?", today).Find(&revenues).Error; err != nil {
-		return map[string]float64{"total": 0}
+	var foodOrders []FoodOrder
+	if err := DB.Where("DATE(order_time) = ?", today.Format("2006-01-02")).Find(&foodOrders).Error; err != nil {
+		return 0
 	}
 
-	result := make(map[string]float64)
-	var total float64
-
-	// Initialize all payment methods with 0
-	result["CASH"] = 0
-	result["KPAY"] = 0
-	result["AYAPAY"] = 0
-	result["WAVEPAY"] = 0
-
-	// Sum up revenues by payment method
-	for _, rev := range revenues {
-		result[rev.PaymentMethod] = rev.Revenue
-		total += rev.Revenue
+	var totalRevenue float64
+	for _, order := range foodOrders {
+		totalRevenue += order.Price * float64(order.Quantity)
 	}
-
-	// Add total to the result
-	result["total"] = total
-
-	return result
+	return totalRevenue
 }
 
 func GetTodayFoodRevenue(c *gin.Context) {
-	revenue := GetDailyFoodRevenue()
-	c.JSON(http.StatusOK, revenue)
+	var totalRevenue float64
+	now := time.Now().UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+
+	if err := DB.Model(&FoodOrder{}).
+		Where("DATE(order_time) = ?", today).
+		Select("COALESCE(SUM(price * quantity), 0)").
+		Scan(&totalRevenue).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to calculate today's food revenue"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"foodRevenue": totalRevenue})
 }
 
 func GetFoodRevenueByDate(c *gin.Context) {
 	date := c.Param("date")
-	targetDate, err := time.Parse("2006-01-02", date)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid date format"})
+	var totalRevenue float64
+
+	if err := DB.Model(&FoodOrder{}).
+		Where("DATE(order_time) = ?", date).
+		Select("COALESCE(SUM(price * quantity), 0)").
+		Scan(&totalRevenue).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to calculate food revenue for the date"})
 		return
 	}
 
-	var revenues []DailyFoodRevenue
-	if err := DB.Where("date = ?", targetDate).Find(&revenues).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to fetch revenue data"})
-		return
-	}
-
-	result := make(map[string]float64)
-	var total float64
-
-	// Initialize all payment methods with 0
-	result["CASH"] = 0
-	result["KPAY"] = 0
-	result["AYAPAY"] = 0
-	result["WAVEPAY"] = 0
-
-	// Sum up revenues by payment method
-	for _, rev := range revenues {
-		result[rev.PaymentMethod] = rev.Revenue
-		total += rev.Revenue
-	}
-
-	// Add total to the result
-	result["total"] = total
-
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{"foodRevenue": totalRevenue})
 }
 
 func SearchMenu(c *gin.Context) {
