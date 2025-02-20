@@ -134,25 +134,15 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	// Get current date in UTC
 	now := time.Now().UTC()
-	currentYear := now.Year()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 
-	// Check if year is in the future
-	if parsedDate.Year() > currentYear {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Please select a date from the current year"})
+	// Convert parsedDate to UTC for comparison
+	parsedDateUTC := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, time.UTC)
+
+	// Don't allow future dates
+	if parsedDateUTC.After(today) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot fetch revenue for future dates"})
 		return
-	}
-
-	// If it's current year, don't allow dates after tomorrow
-	if parsedDate.Year() == currentYear {
-		// Convert parsedDate to UTC for comparison
-		parsedDateUTC := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, time.UTC)
-		tomorrow := now.AddDate(0, 0, 1)
-		tomorrowUTC := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, time.UTC)
-
-		if parsedDateUTC.After(tomorrowUTC) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot fetch revenue for future dates"})
-			return
-		}
 	}
 
 	// Get room revenue split by payment type
