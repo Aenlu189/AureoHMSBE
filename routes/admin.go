@@ -3,7 +3,6 @@ package routes
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	"net/http"
 	"sort"
 	"time"
@@ -121,6 +120,86 @@ func GetRecentActivity(c *gin.Context) {
 	c.JSON(http.StatusOK, activities)
 }
 
+func GetRevenueSummaryByDate(c *gin.Context) {
+	date := c.Param("date")
+	var revenue RevenueData
+	var activities []Activity
+
+	// Get room revenue split by payment type
+	var roomCashIncome float64
+	var roomOnlineIncome float64
+	if err := DB.Model(&Income{}).
+		Joins("JOIN guests ON incomes.guest_id = guests.id").
+		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type = 'CASH'", date).
+		Select("COALESCE(SUM(incomes.amount), 0)").
+		Scan(&roomCashIncome).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room cash revenue"})
+		return
+	}
+
+	if err := DB.Model(&Income{}).
+		Joins("JOIN guests ON incomes.guest_id = guests.id").
+		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type IN ('KPAY', 'AYAPAY', 'WAVEPAY')", date).
+		Select("COALESCE(SUM(incomes.amount), 0)").
+		Scan(&roomOnlineIncome).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room online revenue"})
+		return
+	}
+
+	// Get food revenue
+	var foodIncome float64
+	if err := DB.Model(&Income{}).Where("DATE(created_at) = ? AND type = 'food'", date).Select("COALESCE(SUM(amount), 0)").Scan(&foodIncome).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch food revenue"})
+		return
+	}
+
+	// Get other revenue
+	var otherIncome float64
+	if err := DB.Model(&Income{}).Where("DATE(created_at) = ? AND type NOT IN ('room', 'food')", date).Select("COALESCE(SUM(amount), 0)").Scan(&otherIncome).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch other revenue"})
+		return
+	}
+
+	// Get activities for the day
+	var incomes []Income
+	if err := DB.Preload("Guest").Where("DATE(created_at) = ?", date).Order("created_at DESC").Find(&incomes).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
+		return
+	}
+
+	for _, income := range incomes {
+		activity := Activity{
+			Type:          income.Type,
+			Message:       fmt.Sprintf("%s Revenue", income.Type),
+			Amount:        income.Amount,
+			RoomNumber:    income.RoomNumber,
+			Description:   income.RevenueType,
+			PaymentMethod: income.Guest.PaymentType,
+			RoomType:      income.Guest.RoomType,
+			Timestamp:     income.CreatedAt,
+		}
+		if income.GuestID != nil {
+			activity.GuestID = *income.GuestID
+		}
+		activities = append(activities, activity)
+	}
+
+	revenue = RevenueData{
+		TotalRevenue:      roomCashIncome + roomOnlineIncome + foodIncome + otherIncome,
+		RoomRevenue:       roomCashIncome + roomOnlineIncome,
+		RoomCashRevenue:   roomCashIncome,
+		RoomOnlineRevenue: roomOnlineIncome,
+		FoodRevenue:       foodIncome,
+		OtherRevenue:      otherIncome,
+		Date:              time.Now(),
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"revenue":    revenue,
+		"activities": activities,
+	})
+}
+
 func GetRevenueRange(c *gin.Context) {
 	startDate := c.Param("start")
 	endDate := c.Param("end")
@@ -218,230 +297,6 @@ func GetRevenueSummary(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to get revenue summary"})
 		return
 	}
-
-	c.JSON(http.StatusOK, result)
-}
-
-// GetActivitiesByDate retrieves all income activities for a specific date
-func GetActivitiesByDate(db *gorm.DB, date time.Time) ([]Income, error) {
-	var activities []Income
-
-	// Set the time range for the given date
-	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
-	endTime := startTime.Add(24 * time.Hour)
-
-	// Query the database
-	err := db.Where("created_at BETWEEN ? AND ?", startTime, endTime).
-		Order("created_at desc").
-		Find(&activities).Error
-
-	return activities, err
-}
-
-// GetRevenueByDate handles GET /admin/revenue/date/:date
-func GetRevenueByDate(c *gin.Context) {
-	date := c.Param("date")
-	fmt.Printf("Fetching revenue for date: %s\n", date) // Debug log
-	if date == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Date parameter is required"})
-		return
-	}
-
-	// Parse the date
-	parsedDate, err := time.Parse("2006-01-02", date)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
-		return
-	}
-
-	// Get activities for the date
-	activities, err := GetActivitiesByDate(DB, parsedDate)
-	fmt.Printf("Found %d activities\n", len(activities)) // Debug log
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
-		return
-	}
-
-	// Debug log activity data
-	for i, activity := range activities {
-		fmt.Printf("Activity %d: Type=%s, Amount=%f\n", i, activity.Type, activity.Amount)
-	}
-
-	// Format the response
-	c.JSON(http.StatusOK, gin.H{
-		"activities": activities,
-		"date":       date,
-		"success":    true,
-	})
-}
-
-func isOnlinePayment(method string) bool {
-	onlinePayments := []string{"KPAY", "WAVEPAY", "AYAPAY", "CBPAY"}
-	for _, p := range onlinePayments {
-		if p == method {
-			return true
-		}
-	}
-	return false
-}
-
-// GetRevenue handles GET /admin/revenue
-func GetRevenue(c *gin.Context) {
-	var result struct {
-		TotalRevenue      float64 `json:"totalRevenue"`
-		RoomCashRevenue   float64 `json:"roomCashRevenue"`
-		RoomOnlineRevenue float64 `json:"roomOnlineRevenue"`
-		FoodRevenue       float64 `json:"foodRevenue"`
-		OtherRevenue      float64 `json:"otherRevenue"`
-	}
-
-	// Get all revenue
-	var activities []Income
-	if err := DB.Find(&activities).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch revenue data"})
-		return
-	}
-
-	// Calculate revenues
-	for _, activity := range activities {
-		amount := activity.Amount
-
-		switch activity.Type {
-		case "CHECKED-IN", "EXTEND-STAY":
-			if isOnlinePayment(activity.PaymentMethod) {
-				result.RoomOnlineRevenue += amount
-			} else {
-				result.RoomCashRevenue += amount
-			}
-		case "FOOD", "EMPLOYEE_FOOD", "GUEST_FOOD":
-			result.FoodRevenue += amount
-		default:
-			result.OtherRevenue += amount
-		}
-	}
-
-	result.TotalRevenue = result.RoomCashRevenue + result.RoomOnlineRevenue +
-		result.FoodRevenue + result.OtherRevenue
-
-	c.JSON(http.StatusOK, result)
-}
-
-// GetRevenueByMonth handles GET /admin/revenue/month/:month
-func GetRevenueByMonth(c *gin.Context) {
-	month := c.Param("month")
-	if month == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Month parameter is required"})
-		return
-	}
-
-	// Parse the month (expected format: "2024-02")
-	parsedDate, err := time.Parse("2006-01", month)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid month format. Use YYYY-MM"})
-		return
-	}
-
-	// Calculate start and end of month
-	startOfMonth := time.Date(parsedDate.Year(), parsedDate.Month(), 1, 0, 0, 0, 0, time.UTC)
-	endOfMonth := startOfMonth.AddDate(0, 1, 0).Add(-time.Second)
-
-	var result struct {
-		Activities        []Income `json:"activities"`
-		TotalRevenue      float64  `json:"totalRevenue"`
-		RoomCashRevenue   float64  `json:"roomCashRevenue"`
-		RoomOnlineRevenue float64  `json:"roomOnlineRevenue"`
-		FoodRevenue       float64  `json:"foodRevenue"`
-		OtherRevenue      float64  `json:"otherRevenue"`
-	}
-
-	// Get activities for the month
-	if err := DB.Where("created_at BETWEEN ? AND ?", startOfMonth, endOfMonth).
-		Order("created_at desc").
-		Find(&result.Activities).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
-		return
-	}
-
-	// Calculate revenues
-	for _, activity := range result.Activities {
-		amount := activity.Amount
-
-		switch activity.Type {
-		case "CHECKED-IN", "EXTEND-STAY":
-			if isOnlinePayment(activity.PaymentMethod) {
-				result.RoomOnlineRevenue += amount
-			} else {
-				result.RoomCashRevenue += amount
-			}
-		case "FOOD", "EMPLOYEE_FOOD", "GUEST_FOOD":
-			result.FoodRevenue += amount
-		default:
-			result.OtherRevenue += amount
-		}
-	}
-
-	result.TotalRevenue = result.RoomCashRevenue + result.RoomOnlineRevenue +
-		result.FoodRevenue + result.OtherRevenue
-
-	c.JSON(http.StatusOK, result)
-}
-
-// GetRevenueByYear handles GET /admin/revenue/year/:year
-func GetRevenueByYear(c *gin.Context) {
-	year := c.Param("year")
-	if year == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Year parameter is required"})
-		return
-	}
-
-	// Parse the year
-	parsedYear, err := time.Parse("2006", year)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid year format. Use YYYY"})
-		return
-	}
-
-	// Calculate start and end of year
-	startOfYear := time.Date(parsedYear.Year(), 1, 1, 0, 0, 0, 0, time.UTC)
-	endOfYear := startOfYear.AddDate(1, 0, 0).Add(-time.Second)
-
-	var result struct {
-		Activities        []Income `json:"activities"`
-		TotalRevenue      float64  `json:"totalRevenue"`
-		RoomCashRevenue   float64  `json:"roomCashRevenue"`
-		RoomOnlineRevenue float64  `json:"roomOnlineRevenue"`
-		FoodRevenue       float64  `json:"foodRevenue"`
-		OtherRevenue      float64  `json:"otherRevenue"`
-	}
-
-	// Get activities for the year
-	if err := DB.Where("created_at BETWEEN ? AND ?", startOfYear, endOfYear).
-		Order("created_at desc").
-		Find(&result.Activities).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
-		return
-	}
-
-	// Calculate revenues
-	for _, activity := range result.Activities {
-		amount := activity.Amount
-
-		switch activity.Type {
-		case "CHECKED-IN", "EXTEND-STAY":
-			if isOnlinePayment(activity.PaymentMethod) {
-				result.RoomOnlineRevenue += amount
-			} else {
-				result.RoomCashRevenue += amount
-			}
-		case "FOOD", "EMPLOYEE_FOOD", "GUEST_FOOD":
-			result.FoodRevenue += amount
-		default:
-			result.OtherRevenue += amount
-		}
-	}
-
-	result.TotalRevenue = result.RoomCashRevenue + result.RoomOnlineRevenue +
-		result.FoodRevenue + result.OtherRevenue
 
 	c.JSON(http.StatusOK, result)
 }
