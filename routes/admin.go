@@ -3,6 +3,7 @@ package routes
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"net/http"
 	"sort"
 	"time"
@@ -299,4 +300,50 @@ func GetRevenueSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// GetActivitiesByDate retrieves all income activities for a specific date
+func GetActivitiesByDate(db *gorm.DB, date time.Time) ([]Income, error) {
+	var activities []Income
+
+	// Set the time range for the given date
+	startTime := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	endTime := startTime.Add(24 * time.Hour)
+
+	// Query the database
+	err := db.Where("created_at BETWEEN ? AND ?", startTime, endTime).
+		Order("created_at desc").
+		Find(&activities).Error
+
+	return activities, err
+}
+
+// GetRevenueByDate handles GET /admin/revenue/date/:date
+func GetRevenueByDate(c *gin.Context) {
+	date := c.Param("date")
+	if date == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Date parameter is required"})
+		return
+	}
+
+	// Parse the date
+	parsedDate, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use YYYY-MM-DD"})
+		return
+	}
+
+	// Get activities for the date
+	activities, err := GetActivitiesByDate(DB, parsedDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch activities"})
+		return
+	}
+
+	// Format the response
+	c.JSON(http.StatusOK, gin.H{
+		"activities": activities,
+		"date":       date,
+		"success":    true,
+	})
 }

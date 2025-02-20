@@ -130,6 +130,12 @@ func main() {
 	// Add your protected routes here
 	protected.GET("/stats", routes.GetDashboardStats)
 
+	// Admin routes
+	admin := router.Group("/admin")
+	{
+		admin.GET("/revenue/date/:date", routes.GetRevenueByDate)
+	}
+
 	// Start the server
 	fmt.Println("Server starting on :8080...")
 	if err := router.Run(":8080"); err != nil {
