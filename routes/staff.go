@@ -1,15 +1,15 @@
 package routes
 
 import (
+	"fmt"
+	"github.com/dgrijalva/
 	"github.com/dgrijalva/jwt-go"
-	"g
 	"github.com/gin-contrib/sessions"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"time"
-s"
-	"
-	"os"
+	"time"
+	"fmt"
 )
 
 type Staff struct {
@@ -29,8 +29,8 @@ type CleaningRecord struct {
 	StaffID    uint      `gorm:"not null"`
 	Staff      Staff     `gorm:"foreignKey:StaffID"`
 	StartTime  time.Time `gorm:"not null"`
-	EndTime    *time.Time
 	Status     string `gorm:"type:enum('IN_PROGRESS','COMPLETED');default:'IN_PROGRESS'"`
+	Status     string    `gorm:"type:enum('IN_PROGRESS','COMPLETED');default:'IN_PROGRESS'"`
 }
 
 func generateStaffToken(staff *Staff) (string, error) {
@@ -41,13 +41,56 @@ func generateStaffToken(staff *Staff) (string, error) {
 		"exp":      time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	// Use a secure secret key
 	secretKey := []byte(os.Getenv("JWT_SECRET_KEY"))
 	if len(secretKey) == 0 {
-		secretKey = []byte("your-256-bit-secret") // Fallback secret (change in production)
+		secretKey = []byte("your-256-bit-secret")
 	}
 
 	return token.SignedString(secretKey)
+}
+
+func verifyStaffToken(tokenString string) (*jwt.Token, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		secretKey := []byte(os.Getenv("JWT_SECRET_KEY"))
+		if len(secretKey) == 0 {
+			secretKey = []byte("your-256-bit-secret")
+		}
+		return secretKey, nil
+	})
+}
+
+func StaffAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		tokenString := authHeader[7:]
+		token, err := verifyStaffToken(tokenString)
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token claims"})
+			c.Abort()
+			return
+		}
+
+		c.Set("staffId", uint(claims["id"].(float64)))
+		c.Set("staffRole", claims["role"].(string))
+		c.Next()
+	}
 }
 
 func StaffLogin(c *gin.Context) {
@@ -77,18 +120,19 @@ func StaffLogin(c *gin.Context) {
 		return
 	}
 
-	// Generate JWT token
 	token, err := generateStaffToken(&staff)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error generating token"})
 		return
 	}
 
-	// Set session
 	session := sessions.Default(c)
 	session.Set("user_id", staff.ID)
 	session.Set("role", staff.Role)
-	session.Save()
+	if err := session.Save(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error saving session"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
@@ -103,34 +147,11 @@ func StaffLogin(c *gin.Context) {
 }
 
 func GetRoomsForCleaning(c *gin.Context) {
-	// Verify JWT token
-	authHeader := c.GetHeader("Authorization")
-	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+	staffId, exists := c.Get("staffId")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
-
-	tokenString := authHeader[7:]
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		secretKey := []byte(os.Getenv("JWT_SECRET_KEY"))
-		if len(secretKey) == 0 {
-			secretKey = []byte("your-256-bit-secret") // Fallback secret (change in production)
-		}
-		return secretKey, nil
-	})
-
-	if err != nil || !token.Valid {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
-		return
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token claims"})
-		return
-	}
-
-	userID := uint(claims["id"].(float64))
 
 	var rooms []Rooms
 	if err := DB.Where("status = ? OR status = ?", 5, 7).Find(&rooms).Error; err != nil {
@@ -160,7 +181,7 @@ func GetRoomsForCleaning(c *gin.Context) {
 		if record, exists := cleaningMap[room.Room]; exists {
 			roomData["cleaning_status"] = record.Status
 			roomData["cleaning_start_time"] = record.StartTime
-			if record.StaffID == userID {
+			if record.StaffID == staffId.(uint) {
 				roomData["assigned_to_me"] = true
 			}
 		}
@@ -174,9 +195,8 @@ func GetRoomsForCleaning(c *gin.Context) {
 }
 
 func StartCleaning(c *gin.Context) {
-	session := sessions.Default(c)
-	userID := session.Get("user_id")
-	if userID == nil {
+	staffId, exists := c.Get("staffId")
+	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -192,6 +212,30 @@ func StartCleaning(c *gin.Context) {
 
 	tx := DB.Begin()
 
+	// Check if room is available for cleaning
+	var room Rooms
+	if err := tx.Where("room = ? AND (status = ? OR status = ?)", request.RoomNumber, 5, 7).First(&room).Error; err != nil {
+		tx.Rollback()
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Room is not available for cleaning"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check room status"})
+		}
+		return
+	}
+
+	// Check if room is already being cleaned
+	var existingRecord CleaningRecord
+	if err := tx.Where("room_number = ? AND status = ?", request.RoomNumber, "IN_PROGRESS").First(&existingRecord).Error; err == nil {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Room is already being cleaned"})
+		return
+	} else if err != gorm.ErrRecordNotFound {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check cleaning status"})
+		return
+	}
+
 	if err := tx.Model(&Rooms{}).Where("room = ?", request.RoomNumber).Update("status", 7).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update room status"})
@@ -200,7 +244,7 @@ func StartCleaning(c *gin.Context) {
 
 	cleaningRecord := CleaningRecord{
 		RoomNumber: request.RoomNumber,
-		StaffID:    userID.(uint),
+		StaffID:    staffId.(uint),
 		StartTime:  time.Now(),
 		Status:     "IN_PROGRESS",
 	}
@@ -216,9 +260,8 @@ func StartCleaning(c *gin.Context) {
 }
 
 func CompleteCleaning(c *gin.Context) {
-	session := sessions.Default(c)
-	userID := session.Get("user_id")
-	if userID == nil {
+	staffId, exists := c.Get("staffId")
+	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -234,21 +277,31 @@ func CompleteCleaning(c *gin.Context) {
 
 	tx := DB.Begin()
 
-	if err := tx.Model(&Rooms{}).Where("room = ?", request.RoomNumber).Update("status", 1).Error; err != nil {
+	if err := tx.Where("room_number = ? AND staff_id = ? AND status = ?",
+	if err := tx.Where("room_number = ? AND staff_id = ? AND status = ?", 
+		request.RoomNumber, staffId, "IN_PROGRESS").First(&cleaningRecord).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update room status"})
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No active cleaning record found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch cleaning record"})
+		}
 		return
 	}
 
 	now := time.Now()
-	if err := tx.Model(&CleaningRecord{}).
-		Where("room_number = ? AND staff_id = ? AND status = ?", request.RoomNumber, userID, "IN_PROGRESS").
-		Updates(map[string]interface{}{
-			"end_time": now,
-			"status":   "COMPLETED",
-		}).Error; err != nil {
+	cleaningRecord.EndTime = &now
+	cleaningRecord.Status = "COMPLETED"
+
+	if err := tx.Save(&cleaningRecord).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update cleaning record"})
+		return
+	}
+
+	if err := tx.Model(&Rooms{}).Where("room = ?", request.RoomNumber).Update("status", 1).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update room status"})
 		return
 	}
 
@@ -256,16 +309,15 @@ func CompleteCleaning(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Cleaning completed successfully"})
 }
 
-func GetStaffCleaningHistory(c *gin.Context) {
-	session := sessions.Default(c)
-	userID := session.Get("user_id")
-	if userID == nil {
+func GetCleaningHistory(c *gin.Context) {
+	staffId, exists := c.Get("staffId")
+	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
 
 	var records []CleaningRecord
-	if err := DB.Where("staff_id = ?", userID).
+	if err := DB.Where("staff_id = ?", staffId).
 		Order("created_at DESC").
 		Limit(50).
 		Find(&records).Error; err != nil {
