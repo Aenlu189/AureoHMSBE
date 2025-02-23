@@ -130,6 +130,16 @@ func main() {
 	// Add your protected routes here
 	protected.GET("/stats", routes.GetDashboardStats)
 
+	// Staff protected routes
+	staffRoutes := router.Group("/staff")
+	staffRoutes.Use(routes.StaffAuthMiddleware())
+	{
+		staffRoutes.GET("/rooms", routes.GetRoomsForCleaning)
+		staffRoutes.POST("/cleaning/start", routes.StartCleaning)
+		staffRoutes.POST("/cleaning/complete", routes.CompleteCleaning)
+		staffRoutes.GET("/cleaning/history", routes.GetCleaningHistory)
+	}
+
 	// Start the server
 	fmt.Println("Server starting on :8080...")
 	if err := router.Run(":8080"); err != nil {
