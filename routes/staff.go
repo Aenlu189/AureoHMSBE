@@ -196,44 +196,30 @@ func StartCleaning(c *gin.Context) {
 
 	tx := DB.Begin()
 
-	var room Rooms
-	if err := tx.Where("room = ? AND (status = ? OR status = ?)", request.RoomNumber, 5, 7).First(&room).Error; err != nil {
+	// Find the existing task record
+	var cleaningRecord CleaningRecord
+	if err := tx.Where("room_number = ? AND staff_id = ? AND status = ?",
+		request.RoomNumber, staffId, "TASK_STARTED").First(&cleaningRecord).Error; err != nil {
 		tx.Rollback()
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Room is not available for cleaning"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No active task found for this room"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check room status"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check task status"})
 		}
 		return
 	}
 
-	var existingRecord CleaningRecord
-	if err := tx.Where("room_number = ? AND status = ?", request.RoomNumber, "IN_PROGRESS").First(&existingRecord).Error; err == nil {
+	// Update the cleaning record status to IN_PROGRESS
+	if err := tx.Model(&cleaningRecord).Update("status", "IN_PROGRESS").Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Room is already being cleaned"})
-		return
-	} else if err != gorm.ErrRecordNotFound {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check cleaning status"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update cleaning status"})
 		return
 	}
 
+	// Update room status to cleaning in progress (7)
 	if err := tx.Model(&Rooms{}).Where("room = ?", request.RoomNumber).Update("status", 7).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update room status"})
-		return
-	}
-
-	cleaningRecord := CleaningRecord{
-		RoomNumber: request.RoomNumber,
-		StaffID:    staffId,
-		StartTime:  time.Now(),
-		Status:     "IN_PROGRESS",
-	}
-
-	if err := tx.Create(&cleaningRecord).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create cleaning record"})
 		return
 	}
 
@@ -429,4 +415,65 @@ func AssignStaffToRoom(c *gin.Context) {
 			"name": staff.Name,
 		},
 	})
+}
+
+// StartTask initiates a cleaning task for a room
+func StartTask(c *gin.Context) {
+	staffId := uint(c.GetFloat64("user_id"))
+	if staffId == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+		return
+	}
+
+	var request struct {
+		RoomNumber string `json:"room_number"`
+	}
+
+	if err := c.BindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	tx := DB.Begin()
+
+	// Check if room exists and is in housekeeping status
+	var room Rooms
+	if err := tx.Where("room = ? AND status = ?", request.RoomNumber, 5).First(&room).Error; err != nil {
+		tx.Rollback()
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Room not found or not available for cleaning"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check room status"})
+		}
+		return
+	}
+
+	// Check if room already has a task or is being cleaned
+	var existingRecord CleaningRecord
+	if err := tx.Where("room_number = ? AND status IN ('TASK_STARTED', 'IN_PROGRESS')", request.RoomNumber).First(&existingRecord).Error; err == nil {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Room already has an active task or is being cleaned"})
+		return
+	} else if err != gorm.ErrRecordNotFound {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check cleaning status"})
+		return
+	}
+
+	// Create cleaning record with TASK_STARTED status
+	cleaningRecord := CleaningRecord{
+		RoomNumber: request.RoomNumber,
+		StaffID:    staffId,
+		StartTime:  time.Now(),
+		Status:     "TASK_STARTED",
+	}
+
+	if err := tx.Create(&cleaningRecord).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create cleaning record"})
+		return
+	}
+
+	tx.Commit()
+	c.JSON(http.StatusOK, gin.H{"message": "Task started successfully"})
 }
