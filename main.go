@@ -69,7 +69,6 @@ func main() {
 	router.GET("/rooms", routes.GetRooms)
 	router.GET("/rooms/:room", routes.GetRoom)
 	router.PUT("rooms/:room", routes.UpdateRoomStatus)
-	router.POST("rooms/assign-staff", routes.AssignStaffToRoom)
 
 	// Room Prices
 	router.GET("/prices", routes.GetRoomPrices)
@@ -130,6 +129,7 @@ func main() {
 
 	// Add your protected routes here
 	protected.GET("/stats", routes.GetDashboardStats)
+	protected.POST("rooms/assign-staff", routes.AssignStaffToRoom)
 
 	// Staff protected routes
 	staffRoutes := router.Group("/staff")
