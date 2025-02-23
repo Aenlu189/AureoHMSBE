@@ -329,3 +329,23 @@ func GetCleaningHistory(c *gin.Context) {
 		"records": formattedRecords,
 	})
 }
+
+// GetStaffList returns a list of all staff members
+func GetStaffList(c *gin.Context) {
+	var staffMembers []Staff
+	if err := DB.Find(&staffMembers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch staff list"})
+		return
+	}
+
+	// Return only necessary information
+	var staffList []gin.H
+	for _, staff := range staffMembers {
+		staffList = append(staffList, gin.H{
+			"id":   staff.ID,
+			"name": staff.Name,
+		})
+	}
+
+	c.JSON(http.StatusOK, staffList)
+}

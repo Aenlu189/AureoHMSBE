@@ -138,6 +138,7 @@ func main() {
 		staffRoutes.POST("/cleaning/start", routes.StartCleaning)
 		staffRoutes.POST("/cleaning/complete", routes.CompleteCleaning)
 		staffRoutes.GET("/cleaning/history", routes.GetCleaningHistory)
+		staffRoutes.GET("/list", routes.GetStaffList)
 	}
 
 	// Start the server
