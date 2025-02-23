@@ -349,3 +349,84 @@ func GetStaffList(c *gin.Context) {
 
 	c.JSON(http.StatusOK, staffList)
 }
+
+// AssignStaffToRoom assigns a staff member to clean a specific room
+func AssignStaffToRoom(c *gin.Context) {
+	var request struct {
+		RoomNumber string `json:"roomNumber"`
+		StaffId    uint   `json:"staffId"`
+	}
+
+	if err := c.BindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	tx := DB.Begin()
+
+	// Check if room exists and is in housekeeping status
+	var room Rooms
+	if err := tx.Where("room = ? AND status = ?", request.RoomNumber, 5).First(&room).Error; err != nil {
+		tx.Rollback()
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Room not found or not available for cleaning"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check room status"})
+		}
+		return
+	}
+
+	// Check if staff exists
+	var staff Staff
+	if err := tx.First(&staff, request.StaffId).Error; err != nil {
+		tx.Rollback()
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Staff member not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check staff"})
+		}
+		return
+	}
+
+	// Check if room is already being cleaned
+	var existingRecord CleaningRecord
+	if err := tx.Where("room_number = ? AND status = ?", request.RoomNumber, "IN_PROGRESS").First(&existingRecord).Error; err == nil {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Room is already being cleaned"})
+		return
+	} else if err != gorm.ErrRecordNotFound {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check cleaning status"})
+		return
+	}
+
+	// Create cleaning record
+	cleaningRecord := CleaningRecord{
+		RoomNumber: request.RoomNumber,
+		StaffID:    request.StaffId,
+		StartTime:  time.Now(),
+		Status:     "IN_PROGRESS",
+	}
+
+	if err := tx.Create(&cleaningRecord).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create cleaning record"})
+		return
+	}
+
+	// Update room status to cleaning in progress
+	if err := tx.Model(&Rooms{}).Where("room = ?", request.RoomNumber).Update("status", 7).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update room status"})
+		return
+	}
+
+	tx.Commit()
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Staff assigned successfully",
+		"staff": gin.H{
+			"id":   staff.ID,
+			"name": staff.Name,
+		},
+	})
+}
