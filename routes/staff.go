@@ -1,26 +1,22 @@
 package routes
 
 import (
+	"errors"
 	"fmt"
-	"github.com/dgrijalva/
-	"github.com/dgrijalva/jwt-go"
-	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
+	"net/http"
 	"time"
-	"time"
-	"fmt"
 )
 
 type Staff struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement"`
-	Name      string    `gorm:"not null"`
-	Email     string    `gorm:"not null"`
-	Username  string    `gorm:"unique;not null"`
-	Password  string    `gorm:"not null"`
-	Role      string    `gorm:"type:enum('HOUSEKEEPING');default:'HOUSEKEEPING'"`
-	CreatedAt time.Time `gorm:"not null"`
-	UpdatedAt time.Time `gorm:"not null"`
+	ID       int    `gorm:"primaryKey"`
+	Name     string `gorm:"not null"`
+	Email    string `gorm:"not null"`
+	Username string `gorm:"unique; not null"`
+	Password string `gorm:"not null"`
+	Role     string `gorm:"type:enum('HOUSEKEEPING');default:'HOUSEKEEPING'"`
 }
 
 type CleaningRecord struct {
@@ -29,68 +25,20 @@ type CleaningRecord struct {
 	StaffID    uint      `gorm:"not null"`
 	Staff      Staff     `gorm:"foreignKey:StaffID"`
 	StartTime  time.Time `gorm:"not null"`
+	EndTime    *time.Time
 	Status     string `gorm:"type:enum('IN_PROGRESS','COMPLETED');default:'IN_PROGRESS'"`
-	Status     string    `gorm:"type:enum('IN_PROGRESS','COMPLETED');default:'IN_PROGRESS'"`
 }
 
-func generateStaffToken(staff *Staff) (string, error) {
+func generateStaffToken(staff Staff) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":       staff.ID,
+		"user_id":  staff.ID,
 		"username": staff.Username,
+		"name":     staff.Name,
 		"role":     staff.Role,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(),
+		"exp":      time.Now().Add(time.Hour * 24).Unix(), // Token expires in 24 hours
 	})
 
-	secretKey := []byte(os.Getenv("JWT_SECRET_KEY"))
-	if len(secretKey) == 0 {
-		secretKey = []byte("your-256-bit-secret")
-	}
-
-	return token.SignedString(secretKey)
-}
-
-func verifyStaffToken(tokenString string) (*jwt.Token, error) {
-	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-
-		secretKey := []byte(os.Getenv("JWT_SECRET_KEY"))
-		if len(secretKey) == 0 {
-			secretKey = []byte("your-256-bit-secret")
-		}
-		return secretKey, nil
-	})
-}
-
-func StaffAuthMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
-			c.Abort()
-			return
-		}
-
-		tokenString := authHeader[7:]
-		token, err := verifyStaffToken(tokenString)
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
-			c.Abort()
-			return
-		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token claims"})
-			c.Abort()
-			return
-		}
-
-		c.Set("staffId", uint(claims["id"].(float64)))
-		c.Set("staffRole", claims["role"].(string))
-		c.Next()
-	}
+	return token.SignedString(jwtSecret)
 }
 
 func StaffLogin(c *gin.Context) {
@@ -107,10 +55,10 @@ func StaffLogin(c *gin.Context) {
 	var staff Staff
 	result := DB.Where("username = ?", requestData.Username).First(&staff)
 	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid username or password"})
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Invalid username or password"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Database error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"message": result.Error.Error()})
 		}
 		return
 	}
@@ -120,35 +68,71 @@ func StaffLogin(c *gin.Context) {
 		return
 	}
 
-	token, err := generateStaffToken(&staff)
+	// Generate JWT token
+	token, err := generateStaffToken(staff)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error generating token"})
-		return
-	}
-
-	session := sessions.Default(c)
-	session.Set("user_id", staff.ID)
-	session.Set("role", staff.Role)
-	if err := session.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error saving session"})
+		fmt.Printf("Token generation error: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to generate token"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Login successful",
+		"message": "Login successful!",
 		"token":   token,
 		"staff": gin.H{
 			"id":       staff.ID,
-			"name":     staff.Name,
 			"username": staff.Username,
+			"name":     staff.Name,
 			"role":     staff.Role,
 		},
 	})
 }
 
+func StaffAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Authorization header required"})
+			c.Abort()
+			return
+		}
+
+		// Remove "Bearer " prefix if present
+		tokenString := authHeader
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		}
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return jwtSecret, nil
+		})
+
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+			c.Abort()
+			return
+		}
+
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+			c.Set("user_id", claims["user_id"])
+			c.Set("username", claims["username"])
+			c.Set("name", claims["name"])
+			c.Set("role", claims["role"])
+			c.Next()
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token claims"})
+			c.Abort()
+			return
+		}
+	}
+}
+
 func GetRoomsForCleaning(c *gin.Context) {
-	staffId, exists := c.Get("staffId")
-	if !exists {
+	staffId := c.GetFloat64("user_id")
+	if staffId == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -181,7 +165,7 @@ func GetRoomsForCleaning(c *gin.Context) {
 		if record, exists := cleaningMap[room.Room]; exists {
 			roomData["cleaning_status"] = record.Status
 			roomData["cleaning_start_time"] = record.StartTime
-			if record.StaffID == staffId.(uint) {
+			if record.StaffID == uint(staffId) {
 				roomData["assigned_to_me"] = true
 			}
 		}
@@ -195,8 +179,8 @@ func GetRoomsForCleaning(c *gin.Context) {
 }
 
 func StartCleaning(c *gin.Context) {
-	staffId, exists := c.Get("staffId")
-	if !exists {
+	staffId := uint(c.GetFloat64("user_id"))
+	if staffId == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -212,7 +196,6 @@ func StartCleaning(c *gin.Context) {
 
 	tx := DB.Begin()
 
-	// Check if room is available for cleaning
 	var room Rooms
 	if err := tx.Where("room = ? AND (status = ? OR status = ?)", request.RoomNumber, 5, 7).First(&room).Error; err != nil {
 		tx.Rollback()
@@ -224,7 +207,6 @@ func StartCleaning(c *gin.Context) {
 		return
 	}
 
-	// Check if room is already being cleaned
 	var existingRecord CleaningRecord
 	if err := tx.Where("room_number = ? AND status = ?", request.RoomNumber, "IN_PROGRESS").First(&existingRecord).Error; err == nil {
 		tx.Rollback()
@@ -244,7 +226,7 @@ func StartCleaning(c *gin.Context) {
 
 	cleaningRecord := CleaningRecord{
 		RoomNumber: request.RoomNumber,
-		StaffID:    staffId.(uint),
+		StaffID:    staffId,
 		StartTime:  time.Now(),
 		Status:     "IN_PROGRESS",
 	}
@@ -260,8 +242,8 @@ func StartCleaning(c *gin.Context) {
 }
 
 func CompleteCleaning(c *gin.Context) {
-	staffId, exists := c.Get("staffId")
-	if !exists {
+	staffId := uint(c.GetFloat64("user_id"))
+	if staffId == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
@@ -277,8 +259,8 @@ func CompleteCleaning(c *gin.Context) {
 
 	tx := DB.Begin()
 
+	var cleaningRecord CleaningRecord
 	if err := tx.Where("room_number = ? AND staff_id = ? AND status = ?",
-	if err := tx.Where("room_number = ? AND staff_id = ? AND status = ?", 
 		request.RoomNumber, staffId, "IN_PROGRESS").First(&cleaningRecord).Error; err != nil {
 		tx.Rollback()
 		if err == gorm.ErrRecordNotFound {
@@ -310,8 +292,8 @@ func CompleteCleaning(c *gin.Context) {
 }
 
 func GetCleaningHistory(c *gin.Context) {
-	staffId, exists := c.Get("staffId")
-	if !exists {
+	staffId := uint(c.GetFloat64("user_id"))
+	if staffId == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
 		return
 	}
