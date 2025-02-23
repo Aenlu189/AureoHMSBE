@@ -26,7 +26,7 @@ type CleaningRecord struct {
 	Staff      Staff     `gorm:"foreignKey:StaffID"`
 	StartTime  time.Time `gorm:"not null"`
 	EndTime    *time.Time
-	Status     string `gorm:"type:enum('IN_PROGRESS','COMPLETED');default:'IN_PROGRESS'"`
+	Status     string `gorm:"type:enum('TASK_STARTED','IN_PROGRESS','COMPLETED');default:'TASK_STARTED'"`
 }
 
 func generateStaffToken(staff Staff) (string, error) {
