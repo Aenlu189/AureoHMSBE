@@ -353,8 +353,8 @@ func GetStaffList(c *gin.Context) {
 // AssignStaffToRoom assigns a staff member to clean a specific room
 func AssignStaffToRoom(c *gin.Context) {
 	var request struct {
-		RoomNumber string `json:"roomNumber"`
-		StaffId    uint   `json:"staffId"`
+		Room    string `json:"room"`
+		StaffId uint   `json:"staff_id"`
 	}
 
 	if err := c.BindJSON(&request); err != nil {
@@ -366,7 +366,7 @@ func AssignStaffToRoom(c *gin.Context) {
 
 	// Check if room exists and is in housekeeping status
 	var room Rooms
-	if err := tx.Where("room = ? AND status = ?", request.RoomNumber, 5).First(&room).Error; err != nil {
+	if err := tx.Where("room = ? AND status = ?", request.Room, 5).First(&room).Error; err != nil {
 		tx.Rollback()
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Room not found or not available for cleaning"})
@@ -390,7 +390,7 @@ func AssignStaffToRoom(c *gin.Context) {
 
 	// Check if room is already being cleaned
 	var existingRecord CleaningRecord
-	if err := tx.Where("room_number = ? AND status = ?", request.RoomNumber, "IN_PROGRESS").First(&existingRecord).Error; err == nil {
+	if err := tx.Where("room_number = ? AND status = ?", request.Room, "IN_PROGRESS").First(&existingRecord).Error; err == nil {
 		tx.Rollback()
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Room is already being cleaned"})
 		return
@@ -402,7 +402,7 @@ func AssignStaffToRoom(c *gin.Context) {
 
 	// Create cleaning record
 	cleaningRecord := CleaningRecord{
-		RoomNumber: request.RoomNumber,
+		RoomNumber: request.Room,
 		StaffID:    request.StaffId,
 		StartTime:  time.Now(),
 		Status:     "IN_PROGRESS",
@@ -415,7 +415,7 @@ func AssignStaffToRoom(c *gin.Context) {
 	}
 
 	// Update room status to cleaning in progress
-	if err := tx.Model(&Rooms{}).Where("room = ?", request.RoomNumber).Update("status", 7).Error; err != nil {
+	if err := tx.Model(&Rooms{}).Where("room = ?", request.Room).Update("status", 7).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update room status"})
 		return
