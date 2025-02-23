@@ -308,16 +308,21 @@ func GetCleaningHistory(c *gin.Context) {
 		return
 	}
 
-	// Format the response
+	// Format the response with capitalized field names to match frontend expectations
 	var formattedRecords []gin.H
 	for _, record := range records {
 		formattedRecord := gin.H{
-			"room_number": record.RoomNumber,
-			"start_time":  record.StartTime,
-			"end_time":    record.EndTime,
-			"status":      record.Status,
+			"RoomNumber": record.RoomNumber,
+			"StartTime":  record.StartTime,
+			"EndTime":    record.EndTime,
+			"Status":     record.Status,
 		}
 		formattedRecords = append(formattedRecords, formattedRecord)
+	}
+
+	// Always return a records array, even if empty
+	if formattedRecords == nil {
+		formattedRecords = []gin.H{}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
