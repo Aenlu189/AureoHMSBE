@@ -1,11 +1,15 @@
 package routes
 
 import (
+	"github.com/dgrijalva/jwt-go"
+	"g
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-gonic/gin"
+	"github.com/dgrijalva/jwt-go"
 	"gorm.io/gorm"
-	"net/http"
 	"time"
+s"
+	"
+	"os"
 )
 
 type Staff struct {
@@ -29,10 +33,21 @@ type CleaningRecord struct {
 	Status     string `gorm:"type:enum('IN_PROGRESS','COMPLETED');default:'IN_PROGRESS'"`
 }
 
-func generateStaffSession(staff *Staff, c *gin.Context) {
-	session := sessions.Default(c)
-	session.Set("user_id", staff.ID)
-	session.Save()
+func generateStaffToken(staff *Staff) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":       staff.ID,
+		"username": staff.Username,
+		"role":     staff.Role,
+		"exp":      time.Now().Add(time.Hour * 24).Unix(),
+	})
+
+	// Use a secure secret key
+	secretKey := []byte(os.Getenv("JWT_SECRET_KEY"))
+	if len(secretKey) == 0 {
+		secretKey = []byte("your-256-bit-secret") // Fallback secret (change in production)
+	}
+
+	return token.SignedString(secretKey)
 }
 
 func StaffLogin(c *gin.Context) {
@@ -62,9 +77,22 @@ func StaffLogin(c *gin.Context) {
 		return
 	}
 
-	generateStaffSession(&staff, c)
+	// Generate JWT token
+	token, err := generateStaffToken(&staff)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Error generating token"})
+		return
+	}
+
+	// Set session
+	session := sessions.Default(c)
+	session.Set("user_id", staff.ID)
+	session.Set("role", staff.Role)
+	session.Save()
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
+		"token":   token,
 		"staff": gin.H{
 			"id":       staff.ID,
 			"name":     staff.Name,
@@ -75,12 +103,34 @@ func StaffLogin(c *gin.Context) {
 }
 
 func GetRoomsForCleaning(c *gin.Context) {
-	session := sessions.Default(c)
-	userID := session.Get("user_id")
-	if userID == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "Unauthorized"})
+	// Verify JWT token
+	authHeader := c.GetHeader("Authorization")
+	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
 		return
 	}
+
+	tokenString := authHeader[7:]
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		secretKey := []byte(os.Getenv("JWT_SECRET_KEY"))
+		if len(secretKey) == 0 {
+			secretKey = []byte("your-256-bit-secret") // Fallback secret (change in production)
+		}
+		return secretKey, nil
+	})
+
+	if err != nil || !token.Valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token"})
+		return
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token claims"})
+		return
+	}
+
+	userID := uint(claims["id"].(float64))
 
 	var rooms []Rooms
 	if err := DB.Where("status = ? OR status = ?", 5, 7).Find(&rooms).Error; err != nil {
@@ -110,7 +160,7 @@ func GetRoomsForCleaning(c *gin.Context) {
 		if record, exists := cleaningMap[room.Room]; exists {
 			roomData["cleaning_status"] = record.Status
 			roomData["cleaning_start_time"] = record.StartTime
-			if record.StaffID == userID.(uint) {
+			if record.StaffID == userID {
 				roomData["assigned_to_me"] = true
 			}
 		}
