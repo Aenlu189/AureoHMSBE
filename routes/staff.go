@@ -300,12 +300,27 @@ func GetCleaningHistory(c *gin.Context) {
 
 	var records []CleaningRecord
 	if err := DB.Where("staff_id = ?", staffId).
-		Order("created_at DESC").
+		Order("start_time DESC").
 		Limit(50).
 		Find(&records).Error; err != nil {
+		fmt.Printf("Error fetching cleaning history: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch cleaning history"})
 		return
 	}
 
-	c.JSON(http.StatusOK, records)
+	// Format the response
+	var formattedRecords []gin.H
+	for _, record := range records {
+		formattedRecord := gin.H{
+			"room_number": record.RoomNumber,
+			"start_time":  record.StartTime,
+			"end_time":    record.EndTime,
+			"status":      record.Status,
+		}
+		formattedRecords = append(formattedRecords, formattedRecord)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"records": formattedRecords,
+	})
 }
