@@ -144,7 +144,8 @@ func GetRoomsForCleaning(c *gin.Context) {
 	}
 
 	var cleaningRecords []CleaningRecord
-	if err := DB.Where("status = ?", "IN_PROGRESS").Find(&cleaningRecords).Error; err != nil {
+	if err := DB.Where("status IN (?, ?, ?) AND staff_id = ?",
+		"ASSIGNED", "TASK_STARTED", "IN_PROGRESS", uint(staffId)).Find(&cleaningRecords).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch cleaning records"})
 		return
 	}
@@ -165,9 +166,7 @@ func GetRoomsForCleaning(c *gin.Context) {
 		if record, exists := cleaningMap[room.Room]; exists {
 			roomData["cleaning_status"] = record.Status
 			roomData["cleaning_start_time"] = record.StartTime
-			if record.StaffID == uint(staffId) {
-				roomData["assigned_to_me"] = true
-			}
+			roomData["assigned_to_me"] = true
 		}
 
 		response = append(response, roomData)
