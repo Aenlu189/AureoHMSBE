@@ -158,9 +158,8 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	fmt.Printf("[Revenue Debug] Querying room cash revenue for date: %s\n", date)
 	if err := DB.Model(&Income{}).
-		Joins("JOIN guests ON incomes.guest_id = guests.id").
-		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type = 'CASH'", date).
-		Select("COALESCE(SUM(incomes.amount), 0)").
+		Where("DATE(created_at) = ? AND type = 'room' AND payment_method = 'CASH'", date).
+		Select("COALESCE(SUM(amount), 0)").
 		Scan(&roomCashIncome).Error; err != nil {
 		fmt.Printf("[Revenue Debug] Error fetching room cash revenue: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room cash revenue"})
@@ -170,9 +169,8 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 
 	fmt.Printf("[Revenue Debug] Querying room online revenue for date: %s\n", date)
 	if err := DB.Model(&Income{}).
-		Joins("JOIN guests ON incomes.guest_id = guests.id").
-		Where("DATE(incomes.created_at) = ? AND incomes.type = 'room' AND guests.payment_type IN ('KPAY', 'AYAPAY', 'WAVEPAY')", date).
-		Select("COALESCE(SUM(incomes.amount), 0)").
+		Where("DATE(created_at) = ? AND type = 'room' AND payment_method IN ('KPAY', 'AYAPAY', 'WAVEPAY')", date).
+		Select("COALESCE(SUM(amount), 0)").
 		Scan(&roomOnlineIncome).Error; err != nil {
 		fmt.Printf("[Revenue Debug] Error fetching room online revenue: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch room online revenue"})
@@ -227,14 +225,13 @@ func GetRevenueSummaryByDate(c *gin.Context) {
 			Amount:        income.Amount,
 			RoomNumber:    income.RoomNumber,
 			Description:   income.RevenueType,
-			PaymentMethod: "CASH", // Default to CASH if Guest is nil
-			RoomType:      "",     // Empty string if Guest is nil
+			PaymentMethod: income.PaymentMethod,
+			RoomType:      "", // Empty string if Guest is nil
 			Timestamp:     income.CreatedAt,
 		}
 
 		// Only set Guest-related fields if Guest exists
 		if income.Guest != nil {
-			activity.PaymentMethod = income.Guest.PaymentType
 			activity.RoomType = income.Guest.RoomType
 		}
 
