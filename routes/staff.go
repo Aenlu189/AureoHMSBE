@@ -26,7 +26,7 @@ type CleaningRecord struct {
 	Staff      Staff     `gorm:"foreignKey:StaffID"`
 	StartTime  time.Time `gorm:"not null"`
 	EndTime    *time.Time
-	Status     string `gorm:"type:enum('TASK_STARTED','IN_PROGRESS','COMPLETED');default:'TASK_STARTED'"`
+	Status     string `gorm:"type:enum('ASSIGNED','TASK_STARTED','IN_PROGRESS','COMPLETED');default:'ASSIGNED'"`
 }
 
 func generateStaffToken(staff Staff) (string, error) {
@@ -196,7 +196,7 @@ func StartCleaning(c *gin.Context) {
 
 	tx := DB.Begin()
 
-	// Find the existing task record
+	// Find the task record
 	var cleaningRecord CleaningRecord
 	if err := tx.Where("room_number = ? AND staff_id = ? AND status = ?",
 		request.RoomNumber, staffId, "TASK_STARTED").First(&cleaningRecord).Error; err != nil {
@@ -376,9 +376,9 @@ func AssignStaffToRoom(c *gin.Context) {
 
 	// Check if room is already being cleaned
 	var existingRecord CleaningRecord
-	if err := tx.Where("room_number = ? AND status = ?", request.Room, "IN_PROGRESS").First(&existingRecord).Error; err == nil {
+	if err := tx.Where("room_number = ? AND status != ?", request.Room, "COMPLETED").First(&existingRecord).Error; err == nil {
 		tx.Rollback()
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Room is already being cleaned"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Room already has an active cleaning task"})
 		return
 	} else if err != gorm.ErrRecordNotFound {
 		tx.Rollback()
@@ -386,24 +386,17 @@ func AssignStaffToRoom(c *gin.Context) {
 		return
 	}
 
-	// Create cleaning record
+	// Create cleaning record with ASSIGNED status
 	cleaningRecord := CleaningRecord{
 		RoomNumber: request.Room,
 		StaffID:    request.StaffId,
 		StartTime:  time.Now(),
-		Status:     "IN_PROGRESS",
+		Status:     "ASSIGNED",
 	}
 
 	if err := tx.Create(&cleaningRecord).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create cleaning record"})
-		return
-	}
-
-	// Update room status to cleaning in progress
-	if err := tx.Model(&Rooms{}).Where("room = ?", request.Room).Update("status", 7).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update room status"})
 		return
 	}
 
@@ -417,7 +410,7 @@ func AssignStaffToRoom(c *gin.Context) {
 	})
 }
 
-// StartTask initiates a cleaning task for a room
+// StartTask updates the cleaning record status to TASK_STARTED
 func StartTask(c *gin.Context) {
 	staffId := uint(c.GetFloat64("user_id"))
 	if staffId == 0 {
@@ -436,41 +429,23 @@ func StartTask(c *gin.Context) {
 
 	tx := DB.Begin()
 
-	// Check if room exists and is in housekeeping status
-	var room Rooms
-	if err := tx.Where("room = ? AND status = ?", request.RoomNumber, 5).First(&room).Error; err != nil {
+	// Find the assigned record
+	var cleaningRecord CleaningRecord
+	if err := tx.Where("room_number = ? AND staff_id = ? AND status = ?",
+		request.RoomNumber, staffId, "ASSIGNED").First(&cleaningRecord).Error; err != nil {
 		tx.Rollback()
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Room not found or not available for cleaning"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No assigned task found for this room"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check room status"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check task status"})
 		}
 		return
 	}
 
-	// Check if room already has a task or is being cleaned
-	var existingRecord CleaningRecord
-	if err := tx.Where("room_number = ? AND status IN ('TASK_STARTED', 'IN_PROGRESS')", request.RoomNumber).First(&existingRecord).Error; err == nil {
+	// Update the cleaning record status to TASK_STARTED
+	if err := tx.Model(&cleaningRecord).Update("status", "TASK_STARTED").Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Room already has an active task or is being cleaned"})
-		return
-	} else if err != gorm.ErrRecordNotFound {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check cleaning status"})
-		return
-	}
-
-	// Create cleaning record with TASK_STARTED status
-	cleaningRecord := CleaningRecord{
-		RoomNumber: request.RoomNumber,
-		StaffID:    staffId,
-		StartTime:  time.Now(),
-		Status:     "TASK_STARTED",
-	}
-
-	if err := tx.Create(&cleaningRecord).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create cleaning record"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task status"})
 		return
 	}
 

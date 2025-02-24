@@ -136,6 +136,7 @@ func main() {
 	staffRoutes.Use(routes.StaffAuthMiddleware())
 	{
 		staffRoutes.GET("/rooms", routes.GetRoomsForCleaning)
+		staffRoutes.POST("/cleaning/start-task", routes.StartTask)
 		staffRoutes.POST("/cleaning/start", routes.StartCleaning)
 		staffRoutes.POST("/cleaning/complete", routes.CompleteCleaning)
 		staffRoutes.GET("/cleaning/history", routes.GetCleaningHistory)
